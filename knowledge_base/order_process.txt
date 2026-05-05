@@ -1,0 +1,60 @@
+ORDER PROCESS AND PRODUCTION LEAD TIMES
+Verification status: Draft template. All lead times, rush fees, and shipping methods must be verified by Chaowei Dental customer service or production management before client demo use.
+
+PART 1 — PRODUCTION STAGES
+
+Impression receipt: When a client's physical impression, digital scan file, STL file, or prescription is received, the customer service team records the case details and checks that the order information is complete. This includes client name, case reference, product type, tooth position, shade requirement, material request, and any special instructions. Typical duration: same business day after receipt, or within [VERIFY: X hours] during normal working hours.
+
+Inspection: The technical or production team reviews the impression, scan, or prescription to confirm that it is usable for production. They check for missing information, unclear margins, incomplete bite registration, damaged impressions, missing STL files, or conflicting instructions. If the case is incomplete or unclear, customer service contacts the client and requests clarification or corrected files. Typical duration: [VERIFY: X business day / X hours] after receipt.
+
+Design: Once the case is accepted, the CAD design team prepares the digital design according to the prescription and material requirements. The design stage may include margin marking, occlusion adjustment, anatomy design, contact point checking, and preparation for milling or printing. If the client requests design confirmation before production, the timeline may be extended until approval is received. Typical duration: [VERIFY: X business day(s)] depending on case complexity.
+
+Production: After design approval, the case moves to production. Depending on the product type, this may include milling, cutting, sintering, porcelain layering, polishing, or other laboratory steps. Full-ceramic and zirconia restorations may require additional processing time for sintering or porcelain finishing. Complex bridges, implant cases, or multi-unit cases may take longer than single-unit restorations. Typical duration: [VERIFY: X–Y business days] depending on product type and complexity.
+
+Quality check: Before shipping, the finished product is inspected by the quality control team. They check fit, surface finish, shade, occlusion, contact points, and whether the final product matches the prescription. If the product does not pass internal quality control, it may require adjustment or remake before dispatch. Typical duration: [VERIFY: same day / X business day].
+
+Shipping: After quality approval, the order is packed and prepared for dispatch. Customer service confirms the shipping method, updates the client when available, and provides the tracking number if the courier service supports tracking. Shipping time depends on destination country, courier service, customs clearance, and local delivery conditions. Typical dispatch timing: [VERIFY: same business day / next business day after QC approval].
+
+PART 2 — LEAD TIME SUMMARY
+
+Standard full-ceramic crown: [VERIFY: X–Y business days] from receipt of a clean and usable impression or digital file.
+
+Standard zirconia crown: [VERIFY: X–Y business days] from receipt of a clean and usable impression or digital file.
+
+Standard implant abutment: [VERIFY: X–Y business days] from receipt of complete implant system information, scan data, and prescription.
+
+Standard bridge case: [VERIFY: X–Y business days] from receipt of complete case information; complex or multi-unit bridge cases may require additional time.
+
+Standard denture or removable appliance: [VERIFY: X–Y business days] from receipt of complete impression and prescription details.
+
+Design confirmation cases: Lead time starts or continues only after the client confirms the design, if approval is required before production.
+
+Orders requiring clarification or corrected files: Lead time is counted from the date the corrected impression, STL file, prescription, or missing information is received.
+
+PART 3 — COMMON DELAY CAUSES
+
+Incomplete prescription: If the prescription does not include product type, tooth position, shade, material, or special instructions, the case may be paused until the client provides the missing details.
+
+Unusable or unclear impression: If the impression is damaged, distorted, incomplete, or does not show the preparation margin clearly, production may be delayed while the client sends a corrected impression or scan.
+
+Missing or incorrect digital files: If the STL file, scan file, bite file, or implant library information is missing or incompatible, the design team may not be able to continue until corrected files are received.
+
+Design approval pending: If the client requests to review and approve the CAD design before production, the production timeline may be extended until written confirmation is received.
+
+Complex case requirements: Implant cases, multi-unit bridges, shade-sensitive anterior restorations, or cases requiring porcelain layering may require additional production and quality control time.
+
+Shipping and customs delay: International delivery may be affected by courier schedules, customs clearance, public holidays, weather disruption, or local delivery issues outside the factory's direct control.
+
+PART 4 — RUSH AND SHIPPING
+
+Rush orders: Rush processing may be available for selected product types depending on current production capacity and case complexity. Rush availability, turnaround time, and additional surcharge must be confirmed by customer service before the order is accepted. Draft placeholder: rush turnaround [VERIFY: X business days], surcharge [VERIFY: X% or amount].
+
+Rush order limitations: Rush processing may not be available for complex implant cases, large bridge cases, cases requiring client design approval, or cases where the impression or file is incomplete. Rush timelines only begin after all required case information has been received and accepted by the technical team.
+
+Shipping notification: When an order is dispatched, customer service informs the client by email. If tracking is available, the email includes the courier name, tracking number, dispatch date, and any relevant delivery notes.
+
+Shipping regions: Shipping method and estimated delivery time depend on destination country or region. Draft placeholder: United States [VERIFY: courier and estimated days], France [VERIFY: courier and estimated days], Germany [VERIFY: courier and estimated days], Netherlands [VERIFY: courier and estimated days], Spain [VERIFY: courier and estimated days], Belgium [VERIFY: courier and estimated days], China [VERIFY: courier and estimated days].
+
+Late delivery handling: If a client has not received the order after the expected delivery date, customer service should check the tracking information, confirm dispatch status, contact the courier if needed, and update the client with the latest available information. If the order has not yet shipped, customer service should confirm the current production stage and provide a realistic next update time without promising an unverified delivery date.
+
+Safe response rule: The agent must not invent production dates, shipping dates, rush fees, or delivery commitments. If the knowledge base does not contain a verified answer, the agent should tell the client that the team will check the case and follow up within 1 business day.
