@@ -18,7 +18,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 KNOWLEDGE_BASE_DIR = PROJECT_ROOT / "knowledge_base"
 
 
-def load_and_chunk(chunk_size: int = 900, chunk_overlap: int = 100):
+def load_and_chunk(chunk_size: int = 1200, chunk_overlap: int = 100):
     """
     Load all .txt files from knowledge_base/ and split them into chunks.
 
