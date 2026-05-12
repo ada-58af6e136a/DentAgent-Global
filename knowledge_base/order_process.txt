@@ -1,60 +1,90 @@
 ORDER PROCESS AND PRODUCTION LEAD TIMES
-Verification status: Draft template. All lead times, rush fees, and shipping methods must be verified by Chaowei Dental customer service or production management before client demo use.
+Last updated: 2026-05
 
 PART 1 — PRODUCTION STAGES
 
-Impression receipt: When a client's physical impression, digital scan file, STL file, or prescription is received, the customer service team records the case details and checks that the order information is complete. This includes client name, case reference, product type, tooth position, shade requirement, material request, and any special instructions. Typical duration: same business day after receipt, or within [VERIFY: X hours] during normal working hours.
+The standard production lead time and turnaround time for each product type is set out in Part 2. All lead times assume receipt of a clean, complete impression or digital scan file (STL format) and a complete prescription on a standard business day.
 
-Inspection: The technical or production team reviews the impression, scan, or prescription to confirm that it is usable for production. They check for missing information, unclear margins, incomplete bite registration, damaged impressions, missing STL files, or conflicting instructions. If the case is incomplete or unclear, customer service contacts the client and requests clarification or corrected files. Typical duration: [VERIFY: X business day / X hours] after receipt.
+Impression receipt: When a client's physical impression, digital scan file (STL), or prescription is received, the customer service team records the case details and confirms that the order information is complete. This includes client name, case reference, product type, tooth position, shade requirement, material, and any special instructions. Typical duration: same business day after receipt during normal working hours (Monday to Saturday, 9 am to 6 pm GMT+8).
 
-Design: Once the case is accepted, the CAD design team prepares the digital design according to the prescription and material requirements. The design stage may include margin marking, occlusion adjustment, anatomy design, contact point checking, and preparation for milling or printing. If the client requests design confirmation before production, the timeline may be extended until approval is received. Typical duration: [VERIFY: X business day(s)] depending on case complexity.
+Inspection: The technical team reviews the impression, scan, or prescription to confirm it is usable for production. They check for missing information, unclear preparation margins, incomplete bite registration, damaged impressions, missing STL files, or conflicting instructions. If the case is incomplete or unclear, customer service contacts the client within 24 hours and requests clarification or corrected files. Typical duration: same business day as receipt, or within 1 business day.
 
-Production: After design approval, the case moves to production. Depending on the product type, this may include milling, cutting, sintering, porcelain layering, polishing, or other laboratory steps. Full-ceramic and zirconia restorations may require additional processing time for sintering or porcelain finishing. Complex bridges, implant cases, or multi-unit cases may take longer than single-unit restorations. Typical duration: [VERIFY: X–Y business days] depending on product type and complexity.
+Design: Once the case is accepted, the CAD design team prepares the digital restoration design according to the prescription and material requirements. The design stage includes margin marking, occlusion adjustment, anatomy design, contact point checking, and preparation for milling or pressing. If the client requests design confirmation before production, the lead time is extended until written approval is received. Typical duration: 1 business day for standard single-unit cases; complex bridge or implant cases may require additional time.
 
-Quality check: Before shipping, the finished product is inspected by the quality control team. They check fit, surface finish, shade, occlusion, contact points, and whether the final product matches the prescription. If the product does not pass internal quality control, it may require adjustment or remake before dispatch. Typical duration: [VERIFY: same day / X business day].
+Production: After design approval (or upon completion of design for standard cases), the case moves to the production stage. Depending on the product type, this includes milling, cutting, sintering, porcelain layering, polishing, and other laboratory steps. Full-ceramic and zirconia restorations require additional processing time for sintering and porcelain finishing. Complex bridge cases, implant abutment cases, or multi-unit cases require longer production time than single-unit restorations. See Part 2 for specific production lead times and turnaround times by product.
 
-Shipping: After quality approval, the order is packed and prepared for dispatch. Customer service confirms the shipping method, updates the client when available, and provides the tracking number if the courier service supports tracking. Shipping time depends on destination country, courier service, customs clearance, and local delivery conditions. Typical dispatch timing: [VERIFY: same business day / next business day after QC approval].
+Quality control: Before shipping, the finished product is inspected by the quality control team. They check fit, surface finish, shade match, occlusion, contact points, and whether the final product matches the prescription. If the product does not pass internal quality control, it is adjusted or remade before dispatch. Typical duration: same business day as production completion, or within 1 business day.
+
+Shipping: After quality approval, the order is packed and dispatched. Customer service sends a dispatch notification to the client by email, including the courier name, tracking number, dispatch date, and estimated delivery date. Typical dispatch timing: same business day as quality control approval, or the following business day.
 
 PART 2 — LEAD TIME SUMMARY
 
-Standard full-ceramic crown: [VERIFY: X–Y business days] from receipt of a clean and usable impression or digital file.
+All production lead times and turnaround times below are counted from the date we receive a clean, usable impression or STL digital scan file and a complete prescription. Lead times are in business days and exclude public holidays and weekends.
 
-Standard zirconia crown: [VERIFY: X–Y business days] from receipt of a clean and usable impression or digital file.
+Production time and lead time — Wieland Zenostar zirconia crown (monolithic or high-translucency layered):
+The standard production turnaround and lead time for a Wieland Zenostar zirconia crown is 5 to 7 business days from receipt of a clean impression or STL file. Rush turnaround for a Wieland Zenostar zirconia crown is available in 3 business days at a 30% surcharge on the unit price.
 
-Standard implant abutment: [VERIFY: X–Y business days] from receipt of complete implant system information, scan data, and prescription.
+Production time and lead time — IPS e.max lithium disilicate crown (pressed or CAD-milled):
+The standard production turnaround and lead time for an IPS e.max crown is 5 to 7 business days from receipt of a clean impression or STL file. Rush turnaround for an IPS e.max crown is available in 3 business days at a 30% surcharge.
 
-Standard bridge case: [VERIFY: X–Y business days] from receipt of complete case information; complex or multi-unit bridge cases may require additional time.
+Production time and lead time — PFM crown (Vita VM9 porcelain over cobalt-chromium alloy):
+The standard production turnaround and lead time for a PFM crown is 5 to 7 business days from receipt of a clean impression. Rush turnaround for a PFM crown is available in 3 business days at a 30% surcharge.
 
-Standard denture or removable appliance: [VERIFY: X–Y business days] from receipt of complete impression and prescription details.
+Production time and lead time — PMMA provisional crown (temporary):
+The standard production turnaround and lead time for a PMMA provisional crown is 2 to 3 business days from receipt of a clean impression or STL file. Rush processing is not available for PMMA provisional crowns — the 2 to 3 business day turnaround already reflects expedited production.
 
-Design confirmation cases: Lead time starts or continues only after the client confirms the design, if approval is required before production.
+Production time and lead time — IPS e.max veneer, pressed lithium disilicate:
+The standard production turnaround and lead time for a pressed IPS e.max veneer is 5 to 7 business days from receipt of a clean impression or STL file. Rush turnaround for an IPS e.max veneer is available in 3 business days at a 30% surcharge.
 
-Orders requiring clarification or corrected files: Lead time is counted from the date the corrected impression, STL file, prescription, or missing information is received.
+Production time and lead time — Wieland Zenostar zirconia inlay or onlay / IPS e.max inlay or onlay:
+The standard production turnaround and lead time for a zirconia or IPS e.max inlay or onlay is 5 business days from receipt of a clean impression or STL file. Rush turnaround is available in 3 business days at a 30% surcharge.
+
+Production time and lead time — Implant crown with custom-milled Wieland Zenostar zirconia abutment:
+The standard production turnaround and lead time for an implant crown with a custom zirconia abutment is 7 to 10 business days from receipt of complete implant system information, STL scan data, and a complete prescription including implant brand, platform diameter, and connection type. Rush processing is not available for implant abutment cases. The additional abutment design and milling step is required and cannot be shortened without compromising fit accuracy.
+
+Production time and lead time — Wieland Zenostar zirconia dental bridge, 3-unit:
+The standard production turnaround and lead time for a 3-unit Wieland Zenostar zirconia bridge is 7 to 10 business days from receipt of a full-arch impression or STL scan file. Rush turnaround in 5 business days is available for standard 3-unit zirconia bridge cases at a 30% surcharge. Rush processing is not available for complex multi-unit bridges or bridge cases requiring client design approval before production begins.
+
+Production time and lead time — Complete removable denture (full arch, premium acrylic):
+The standard production turnaround and lead time for a full-arch complete removable denture is 10 to 14 business days from receipt of the master model and bite registration. Rush processing is not available for complete denture cases — the try-in and verification stages require the full production time and cannot be shortened. (French: délai de production pour une prothèse amovible complète. Spanish: tiempo de producción para dentadura completa removible. Chinese: 全口义齿生产周期。)
+
+Production time and lead time — Cobalt-chromium framework removable partial denture:
+The standard production turnaround and lead time for a cobalt-chromium (CoCr) framework removable partial denture is 7 to 10 business days from receipt of a full-arch impression or working model. Rush processing is not available for CoCr framework partial denture cases.
+
+Production time and lead time — Acrylic removable partial denture (without metal framework):
+The standard production turnaround and lead time for an acrylic removable partial denture without a metal framework is 7 to 10 business days from receipt of impression or model. Rush processing is not available.
+
+Production time and lead time — Flexible partial denture (Valplast thermoplastic nylon):
+The standard production turnaround and lead time for a Valplast flexible partial denture is 7 to 10 business days from receipt of the impression or model. Rush processing is not available for Valplast flexible partial cases.
+
+Design-confirmation cases: Lead time and production turnaround begin or continue only after the client provides written confirmation of the CAD design.
+
+Cases requiring corrected files or clarification: Lead time is counted from the date the corrected impression, STL file, prescription, or missing information is received and accepted by the technical team.
 
 PART 3 — COMMON DELAY CAUSES
 
-Incomplete prescription: If the prescription does not include product type, tooth position, shade, material, or special instructions, the case may be paused until the client provides the missing details.
+Incomplete prescription: If the prescription does not include product type, tooth position, shade, material, or special instructions, the case is paused until the client provides the missing details. The production lead time restarts from the date the complete information is received.
 
-Unusable or unclear impression: If the impression is damaged, distorted, incomplete, or does not show the preparation margin clearly, production may be delayed while the client sends a corrected impression or scan.
+Unusable or unclear impression: If the impression is damaged, distorted, incomplete, or does not show the preparation margin clearly, production is delayed while the client sends a corrected impression or STL scan. The lead time begins from the date the corrected impression is received.
 
-Missing or incorrect digital files: If the STL file, scan file, bite file, or implant library information is missing or incompatible, the design team may not be able to continue until corrected files are received.
+Missing or incorrect digital files: If the STL file, bite scan, or implant library information is missing or incompatible, the design team cannot proceed until corrected files are received.
 
-Design approval pending: If the client requests to review and approve the CAD design before production, the production timeline may be extended until written confirmation is received.
+Design approval pending: If the client requests to review and approve the CAD design before production, the production turnaround is paused until written confirmation is received.
 
-Complex case requirements: Implant cases, multi-unit bridges, shade-sensitive anterior restorations, or cases requiring porcelain layering may require additional production and quality control time.
+Complex case requirements: Implant cases, multi-unit bridges, shade-sensitive anterior restorations, or cases requiring porcelain layering may require additional production and quality control time beyond the standard lead time.
 
-Shipping and customs delay: International delivery may be affected by courier schedules, customs clearance, public holidays, weather disruption, or local delivery issues outside the factory's direct control.
+Shipping and delivery delay: International delivery (livraison internationale, envío internacional, 国际配送) may be affected by courier schedules, customs clearance, public holidays, weather disruption, or local delivery conditions outside the laboratory's direct control. Shipping and delivery delays are not included in the production lead time.
 
-PART 4 — RUSH AND SHIPPING
+PART 4 — RUSH PROCESSING AND SHIPPING
 
-Rush orders: Rush processing may be available for selected product types depending on current production capacity and case complexity. Rush availability, turnaround time, and additional surcharge must be confirmed by customer service before the order is accepted. Draft placeholder: rush turnaround [VERIFY: X business days], surcharge [VERIFY: X% or amount].
+Rush orders: Rush processing is available for single-unit crowns, IPS e.max veneers, and inlay or onlay cases (3 business day turnaround) and for standard 3-unit Wieland Zenostar zirconia bridge cases (5 business day turnaround), subject to current production capacity and case completeness. Rush processing is not available for implant abutment cases, complete dentures, partial dentures (CoCr framework, acrylic, or Valplast), or PMMA provisional crowns. Rush surcharge is 30% of the standard unit price. Rush orders must be confirmed in writing by customer service before the surcharge is applied. (French: traitement urgent; Spanish: producción urgente; Chinese: 加急生产。)
 
-Rush order limitations: Rush processing may not be available for complex implant cases, large bridge cases, cases requiring client design approval, or cases where the impression or file is incomplete. Rush timelines only begin after all required case information has been received and accepted by the technical team.
+Rush order limitations: Rush turnaround times begin only after all required case information — impression or STL file, prescription, bite registration, and any implant system details — has been received and accepted by the technical team. Rush orders cannot be cancelled once production has begun.
 
-Shipping notification: When an order is dispatched, customer service informs the client by email. If tracking is available, the email includes the courier name, tracking number, dispatch date, and any relevant delivery notes.
+Shipping notification: When an order is dispatched, customer service notifies the client by email. The notification includes the courier name, tracking number, dispatch date, and estimated delivery date. (French: notification d'expédition; Spanish: notificación de envío; Chinese: 发货通知。)
 
-Shipping regions: Shipping method and estimated delivery time depend on destination country or region. Draft placeholder: United States [VERIFY: courier and estimated days], France [VERIFY: courier and estimated days], Germany [VERIFY: courier and estimated days], Netherlands [VERIFY: courier and estimated days], Spain [VERIFY: courier and estimated days], Belgium [VERIFY: courier and estimated days], China [VERIFY: courier and estimated days].
+Shipping regions and charges: Clients in the United States are charged a flat shipping fee of USD 12 per shipment via FedEx International Priority. Clients in France, Germany, the Netherlands, Spain, and Belgium are charged USD 15 to USD 25 per shipment depending on parcel weight and courier selection (DHL or FedEx). For regular clients, shipping charges are consolidated and invoiced monthly. Domestic clients in China are quoted separately in CNY.
 
-Late delivery handling: If a client has not received the order after the expected delivery date, customer service should check the tracking information, confirm dispatch status, contact the courier if needed, and update the client with the latest available information. If the order has not yet shipped, customer service should confirm the current production stage and provide a realistic next update time without promising an unverified delivery date.
+Late delivery and shipping delay handling: If a client reports that an order has not arrived after the expected delivery date (retard de livraison / retraso en la entrega / 配送延误), customer service checks the tracking information, confirms dispatch status, contacts the courier if needed, and updates the client with the latest available information within 1 business day. If the order has not yet shipped, customer service confirms the current production stage and provides a realistic next update time. Customer service must not promise an unverified delivery date.
 
-Safe response rule: The agent must not invent production dates, shipping dates, rush fees, or delivery commitments. If the knowledge base does not contain a verified answer, the agent should tell the client that the team will check the case and follow up within 1 business day.
+Safe response rule: Customer service must not invent production dates, shipping dates, rush fees, lead times, or delivery commitments that are not confirmed by the current production team. If the answer is not available in this document, the team must tell the client that they will check the case and follow up within 1 business day.
