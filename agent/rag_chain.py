@@ -7,7 +7,7 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from google import genai
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception
 
-from agent.system_prompt import SYSTEM_PROMPT
+from .system_prompt import SYSTEM_PROMPT
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CHROMA_DIR = PROJECT_ROOT / "chroma_db"
