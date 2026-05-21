@@ -4,6 +4,7 @@ import json
 from dotenv import load_dotenv
 from langdetect import detect, LangDetectException
 from google import genai
+from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception
 
 load_dotenv()
 
@@ -16,13 +17,30 @@ INTENT_CATEGORIES = [
 
 
 def detect_language(text: str) -> str:
-    """Returns ISO language code: en, fr, de, nl, es, zh, etc."""
+    """Returns ISO language code. Falls back to 'en' on failure."""
+    if not text or not text.strip():
+        return "en"
+    # CJK Unicode block: fast path avoids langdetect unreliability on short CJK text
+    cjk_chars = sum(1 for c in text if "一" <= c <= "鿿")
+    if cjk_chars / max(len(text), 1) > 0.1:
+        return "zh"
     try:
         return detect(text)
     except LangDetectException:
         return "en"
 
 
+def _is_transient(exc: BaseException) -> bool:
+    msg = str(exc)
+    return "503" in msg or "UNAVAILABLE" in msg or "429" in msg or "quota" in msg.lower()
+
+
+@retry(
+    retry=retry_if_exception(_is_transient),
+    wait=wait_exponential(multiplier=2, min=4, max=60),
+    stop=stop_after_attempt(4),
+    reraise=True,
+)
 def classify_intent(email_body: str) -> dict:
     """
     Returns {intent, language, escalate, confidence, reason}.

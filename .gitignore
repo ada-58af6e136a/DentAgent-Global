@@ -210,3 +210,10 @@ __marimo__/
 # Project-specific generated files
 chroma_db/
 .env
+
+# Runtime data (email content — never commit)
+data/
+
+# macOS metadata
+.DS_Store
+**/.DS_Store

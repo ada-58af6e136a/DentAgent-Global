@@ -5,10 +5,11 @@ from dotenv import load_dotenv
 from langchain_chroma import Chroma
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from google import genai
+from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception
 
-from system_prompt import SYSTEM_PROMPT
+from agent.system_prompt import SYSTEM_PROMPT
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CHROMA_DIR = PROJECT_ROOT / "chroma_db"
 
 load_dotenv(PROJECT_ROOT / ".env")
@@ -28,6 +29,17 @@ _db = Chroma(
 _retriever = _db.as_retriever(search_kwargs={"k": 4})
 
 
+def _is_transient(exc: BaseException) -> bool:
+    msg = str(exc)
+    return "503" in msg or "UNAVAILABLE" in msg or "429" in msg or "quota" in msg.lower()
+
+
+@retry(
+    retry=retry_if_exception(_is_transient),
+    wait=wait_exponential(multiplier=2, min=4, max=60),
+    stop=stop_after_attempt(4),
+    reraise=True,
+)
 def generate_reply(email_body: str, language: str) -> dict:
     """
     Retrieves top-4 knowledge base chunks and generates a reply.
