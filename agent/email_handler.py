@@ -13,15 +13,16 @@ import json
 import time
 import os
 import smtplib
+from pathlib import Path
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.header import decode_header
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 
-from agent.classifier import classify_intent
-from agent.rag_chain import generate_reply
-from agent.analytics import log_interaction
+from .classifier import classify_intent
+from .rag_chain import generate_reply
+from .analytics import log_interaction
 
 load_dotenv()
 
