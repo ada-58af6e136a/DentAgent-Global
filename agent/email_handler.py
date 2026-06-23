@@ -148,15 +148,25 @@ def process_email(email_data):
         "escalate": escalate,
         "draft_reply": None,
         "sources": [],
+        "retrieval_score": 0.0,
         "status": "pending_review"
     }
 
     if not escalate:
-        result = generate_reply(email_data["body"], language)
-        entry["draft_reply"] = result["reply"]
-        entry["sources"] = result["sources"]
-        print(f"  Draft generated ({len(result['reply'])} chars)")
-    else:
+        result = generate_reply(email_data["body"], language, intent)
+        entry["retrieval_score"] = result.get("retrieval_score", 0.0)
+
+        if result.get("kb_miss"):
+            # No KB chunk passed the relevance threshold — escalate instead of guessing
+            escalate = True
+            entry["escalate"] = True
+            print(f"  KB miss (best score {result['retrieval_score']:.3f}) — forcing escalation")
+        else:
+            entry["draft_reply"] = result["reply"]
+            entry["sources"] = result["sources"]
+            print(f"  Draft generated ({len(result['reply'])} chars, score {result['retrieval_score']:.3f})")
+
+    if escalate:
         ack_templates = {
             "zh": "感谢您的来信。我们的专业团队将在1个工作日内跟进处理您的问题。",
             "fr": (
