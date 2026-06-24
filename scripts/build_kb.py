@@ -16,12 +16,17 @@ Important:
 from pathlib import Path
 import os
 import shutil
+import sys
 import time
 
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
+# Fix M: explicit sys.path so document_loader is importable regardless of CWD.
+# Python adds the script's own directory to sys.path[0] when run directly, but
+# not when build_kb is imported as a module from another script.
+sys.path.insert(0, str(Path(__file__).parent))
 from document_loader import load_and_chunk
 
 
@@ -81,6 +86,11 @@ def build_knowledge_base(reset: bool = False):
         time.sleep(SLEEP_SECONDS)
         db.add_documents(batch)
         print(f"  Batch {batch_num}/{-(-len(chunks)//BATCH_SIZE)}: {len(batch)} chunks embedded.")
+
+    # Fix L: write a build timestamp so rag_chain.py can detect when the KB
+    # has been rebuilt and trigger a hot reload without a process restart.
+    ts_file = CHROMA_DIR / ".build_timestamp"
+    ts_file.write_text(str(time.time()))
 
     print(f"Done. {len(chunks)} chunks stored in {CHROMA_DIR}/")
 
