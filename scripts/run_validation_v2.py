@@ -21,13 +21,15 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from agent.rag_chain import (
-    _bm25_retriever,
-    _mmr_retriever,
-    _reranker,
-    _rrf_merge,
-    RERANK_THRESHOLD,
-)
+# Fix M: lazy-init globals (_bm25_retriever, _mmr_retriever, _reranker) are
+# None at import time (Fix D). Importing them by value would freeze the None.
+# Import the module reference instead and call _ensure_initialized() once
+# before first use so the globals are populated.
+from dotenv import load_dotenv
+import agent.rag_chain as rag_chain
+from agent.rag_chain import _rrf_merge, RERANK_THRESHOLD
+
+load_dotenv(PROJECT_ROOT / ".env")
 
 V1_CSV = PROJECT_ROOT / "validation" / "Validation_Results_V1_28Q.csv"
 OUTPUT_CSV = PROJECT_ROOT / "validation" / "Validation_Results_V2_28Q.csv"
@@ -109,15 +111,15 @@ SNIPPET_CHECKS = {
 
 def _retrieve_v2(question: str) -> tuple:
     """Run BM25 + MMR + CrossEncoder and return (doc, source_name, score, kb_miss)."""
-    bm25_results = _bm25_retriever.invoke(question)
-    mmr_results = _mmr_retriever.invoke(question)
+    bm25_results = rag_chain._bm25_retriever.invoke(question)
+    mmr_results = rag_chain._mmr_retriever.invoke(question)
     candidates = _rrf_merge([mmr_results, bm25_results])
 
     if not candidates:
         return None, "no result", 0.0, True
 
     pairs = [(question, doc.page_content) for doc in candidates]
-    rerank_scores = _reranker.predict(pairs)
+    rerank_scores = rag_chain._reranker.predict(pairs)
     ranked = sorted(zip(candidates, rerank_scores), key=lambda x: float(x[1]), reverse=True)
 
     top_doc, top_score = ranked[0]
@@ -140,6 +142,11 @@ def _is_correct_v2(idx: int, source: str, snippet: str, kb_miss: bool) -> str:
 
 
 def run_validation() -> None:
+    # Fix M: initialize lazy-init retrievers before first use.
+    rag_chain._ensure_initialized()
+    # Fix M: create output dir if it doesn't exist (works from any CWD).
+    OUTPUT_CSV.parent.mkdir(parents=True, exist_ok=True)
+
     # Load V1 results for comparison
     v1_rows: dict = {}
     if V1_CSV.exists():

@@ -228,6 +228,7 @@ def _load_v3_verdicts() -> dict:
 
 
 def run_validation() -> None:
+    OUT_CSV.parent.mkdir(parents=True, exist_ok=True)   # Fix M: works from any CWD
     v3_prev = _load_v3_verdicts()
 
     print(f"Running 42-question benchmark  "

@@ -166,6 +166,7 @@ def _load_verdicts(csv_path: Path, col: str) -> dict:
 
 
 def run_validation() -> None:
+    OUT_CSV.parent.mkdir(parents=True, exist_ok=True)   # Fix M: works from any CWD
     v1 = _load_verdicts(V1_CSV, "Source correct (Y/N)")
     v2 = _load_verdicts(V2_CSV, "V2 Correct")
 
