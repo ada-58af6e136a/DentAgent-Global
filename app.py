@@ -2,20 +2,17 @@
 app.py
 
 Streamlit review dashboard for the dental CS agent.
-Shows pending drafts from draft_queue.jsonl.
+Shows pending drafts from SQLite (agent/db.py).
 CS staff can Approve, Edit, or Escalate each draft.
+
+Fix B: draft queue is now SQLite — no more JSONL race conditions
+       or full-file rewrites on every approval action.
 """
 
-import json
-import os
 import streamlit as st
-from pathlib import Path
-from datetime import datetime, timezone
 from agent.analytics import log_interaction
 from agent.email_handler import send_reply
-
-DRAFT_QUEUE = "data/draft_queue.jsonl"
-PROCESSED_QUEUE = "data/processed_queue.jsonl"
+from agent.db import load_pending_drafts, mark_as_processed, count_processed
 
 st.set_page_config(
     page_title="Dental CS Agent — Review Dashboard",
@@ -25,55 +22,11 @@ st.set_page_config(
 st.title("Dental CS Agent — Review Dashboard")
 
 
-def load_pending_drafts():
-    """Load all drafts with status 'pending_review'."""
-    drafts = []
-    if not Path(DRAFT_QUEUE).exists():
-        return drafts
-    with open(DRAFT_QUEUE, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                entry = json.loads(line)
-                if entry.get("status") == "pending_review":
-                    drafts.append(entry)
-    return drafts
-
-
-def mark_as_processed(message_id: str, action: str,
-                       final_reply: str, human_edited: bool):
-    """Move a draft from pending to processed and update analytics."""
-    drafts = []
-    target = None
-
-    if Path(DRAFT_QUEUE).exists():
-        with open(DRAFT_QUEUE, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                entry = json.loads(line)
-                if entry.get("message_id") == message_id:
-                    entry["status"] = action
-                    entry["final_reply"] = final_reply
-                    entry["human_edited"] = human_edited
-                    entry["processed_at"] = datetime.now(
-                        timezone.utc).isoformat()
-                    target = entry
-                else:
-                    drafts.append(entry)
-
-    # Rewrite queue without the processed entry
-    with open(DRAFT_QUEUE, "w", encoding="utf-8") as f:
-        for d in drafts:
-            f.write(json.dumps(d, ensure_ascii=False) + "\n")
-
-    # Append to processed queue
+def _handle_action(message_id: str, action: str,
+                   final_reply: str, human_edited: bool) -> None:
+    """Update SQLite status and log the interaction to analytics."""
+    target = mark_as_processed(message_id, action, final_reply, human_edited)
     if target:
-        with open(PROCESSED_QUEUE, "a", encoding="utf-8") as f:
-            f.write(json.dumps(target, ensure_ascii=False) + "\n")
-
-        # Log to analytics
         log_interaction(
             email_data={
                 "message_id": target.get("message_id", ""),
@@ -90,7 +43,7 @@ def mark_as_processed(message_id: str, action: str,
             sources=target.get("sources", []),
             human_edited=human_edited,
             final_reply=final_reply,
-            action=action
+            action=action,
         )
 
 
@@ -101,7 +54,7 @@ drafts = load_pending_drafts()
 if not drafts:
     st.info("No pending drafts. The agent will populate this list "
             "as new emails arrive.")
-    st.caption(f"Queue file: {DRAFT_QUEUE}")
+    st.caption("Queue: data/drafts.db")
 else:
     st.markdown(f"**{len(drafts)} draft(s) awaiting review**")
     st.divider()
@@ -183,10 +136,8 @@ else:
                             reply_body=edited_reply,
                             original_message_id=draft.get("message_id", "")
                         )
-                        mark_as_processed(
-                            message_id, "approved",
-                            edited_reply, human_edited
-                        )
+                        _handle_action(message_id, "approved",
+                                       edited_reply, human_edited)
                         if sent:
                             st.success("Reply sent and logged.")
                         else:
@@ -208,10 +159,7 @@ else:
                             reply_body=edited_reply,
                             original_message_id=draft.get("message_id", "")
                         )
-                        mark_as_processed(
-                            message_id, "edited",
-                            edited_reply, True
-                        )
+                        _handle_action(message_id, "edited", edited_reply, True)
                         if sent:
                             st.success("Edited reply sent and logged.")
                         else:
@@ -222,10 +170,8 @@ else:
                     if st.button("🚨 Escalate",
                                  key=f"escalate_{i}",
                                  use_container_width=True):
-                        mark_as_processed(
-                            message_id, "escalated",
-                            draft_reply, False
-                        )
+                        _handle_action(message_id, "escalated",
+                                       draft_reply, False)
                         st.warning("Escalated to human team.")
                         st.rerun()
 
@@ -234,15 +180,10 @@ else:
 with st.sidebar:
     st.markdown("### Quick stats")
 
-    processed_count = 0
-    if Path(PROCESSED_QUEUE).exists():
-        with open(PROCESSED_QUEUE, "r", encoding="utf-8") as f:
-            processed_count = sum(1 for line in f if line.strip())
-
     st.metric("Pending review", len(drafts))
-    st.metric("Processed total", processed_count)
+    st.metric("Processed total", count_processed())
 
     st.divider()
     st.caption("Run `python analytics.py` for full accuracy report.")
-    st.caption(f"Queue: `{DRAFT_QUEUE}`")
-    st.caption(f"Log: `interaction_log.jsonl`")
+    st.caption("Queue: `data/drafts.db`")
+    st.caption("Log: `data/interaction_log.jsonl`")

@@ -1,14 +1,12 @@
-import os
 import json
 
 from dotenv import load_dotenv
 from langdetect import detect, LangDetectException
-from google import genai
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception
 
-load_dotenv()
+from .api_client import get_client
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+load_dotenv()
 
 INTENT_CATEGORIES = [
     "PRICING", "MATERIAL", "PROGRESS",
@@ -32,7 +30,12 @@ def detect_language(text: str) -> str:
 
 def _is_transient(exc: BaseException) -> bool:
     msg = str(exc)
-    return "503" in msg or "UNAVAILABLE" in msg or "429" in msg or "quota" in msg.lower()
+    return (
+        "503" in msg or "UNAVAILABLE" in msg
+        or "429" in msg or "quota" in msg.lower()
+        or "ReadTimeout" in type(exc).__name__
+        or "Timeout" in type(exc).__name__
+    )
 
 
 @retry(
@@ -62,7 +65,7 @@ Return JSON only, no other text:
 Email:
 {email_body[:800]}"""
 
-    response = client.models.generate_content(
+    response = get_client().models.generate_content(
         model="gemini-2.5-flash",
         contents=prompt,
     )

@@ -7,11 +7,15 @@ and making the case for enabling auto-send in Phase 5.
 """
 
 import json
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-LOG_FILE = "data/interaction_log.jsonl"
+from .logger import get_logger
+
+log = get_logger(__name__)
+
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+LOG_FILE = str(_PROJECT_ROOT / "data" / "interaction_log.jsonl")
 
 
 def log_interaction(
@@ -54,7 +58,8 @@ def log_interaction(
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-    print(f"  Logged: intent={record['intent']} | action={action}")
+    log.debug("Logged: intent=%s action=%s mid=%s",
+              record["intent"], action, record["message_id"][:30])
 
 
 def get_accuracy_report():
