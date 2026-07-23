@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from langdetect import detect, LangDetectException
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception
 
-from .api_client import get_client
+from .api_client import generate_content_tracked, _is_transient
 
 load_dotenv()
 
@@ -26,16 +26,6 @@ def detect_language(text: str) -> str:
         return detect(text)
     except LangDetectException:
         return "en"
-
-
-def _is_transient(exc: BaseException) -> bool:
-    msg = str(exc)
-    return (
-        "503" in msg or "UNAVAILABLE" in msg
-        or "429" in msg or "quota" in msg.lower()
-        or "ReadTimeout" in type(exc).__name__
-        or "Timeout" in type(exc).__name__
-    )
 
 
 @retry(
@@ -65,7 +55,7 @@ Return JSON only, no other text:
 Email:
 {email_body[:800]}"""
 
-    response = get_client().models.generate_content(
+    response = generate_content_tracked(
         model="gemini-2.5-flash",
         contents=prompt,
     )

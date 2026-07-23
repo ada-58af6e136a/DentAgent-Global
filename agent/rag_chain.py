@@ -11,7 +11,7 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from sentence_transformers import CrossEncoder
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception
 
-from .api_client import get_client
+from .api_client import generate_content_tracked, _is_transient
 from .system_prompt import SYSTEM_PROMPT
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -182,7 +182,7 @@ def _rewrite_query(email_body: str) -> str:
             "as one concise sentence. Output only the question, nothing else.\n\n"
             f"Email:\n{email_body[:600]}"
         )
-        response = get_client().models.generate_content(
+        response = generate_content_tracked(
             model="gemini-2.5-flash",
             contents=[{"role": "user", "parts": [{"text": prompt}]}],
         )
@@ -207,23 +207,13 @@ def _generate_hypothesis(email_body: str) -> str:
             "Output only the answer, nothing else.\n\n"
             f"Inquiry:\n{email_body[:500]}"
         )
-        response = get_client().models.generate_content(
+        response = generate_content_tracked(
             model="gemini-2.5-flash",
             contents=[{"role": "user", "parts": [{"text": prompt}]}],
         )
         return response.text.strip() or email_body
     except Exception:
         return email_body
-
-
-def _is_transient(exc: BaseException) -> bool:
-    msg = str(exc)
-    return (
-        "503" in msg or "UNAVAILABLE" in msg
-        or "429" in msg or "quota" in msg.lower()
-        or "ReadTimeout" in type(exc).__name__
-        or "Timeout" in type(exc).__name__
-    )
 
 
 def retrieve_for_email(email_body: str, intent: str = "OTHER") -> dict:
@@ -331,7 +321,7 @@ Knowledge base context (use this to answer — do not invent information):
 Client email:
 {email_body}"""
 
-    response = get_client().models.generate_content(
+    response = generate_content_tracked(
         model="gemini-2.5-flash",
         contents=[
             {"role": "user", "parts": [{"text": SYSTEM_PROMPT + "\n\n" + user_message}]}

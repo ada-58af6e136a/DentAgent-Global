@@ -30,6 +30,9 @@ typing_extensions==4.15.0
 urllib3==2.6.3
 websockets==16.0
 chromadb==1.5.9
+streamlit==1.57.0
+pandas==3.0.3
+altair==6.1.0
 langchain-community==0.4.1
 langchain-openai==1.2.1
 langchain-chroma==1.1.0
