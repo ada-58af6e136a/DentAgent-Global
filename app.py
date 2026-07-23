@@ -7,12 +7,37 @@ CS staff can Approve, Edit, or Escalate each draft.
 
 Fix B: draft queue is now SQLite — no more JSONL race conditions
        or full-file rewrites on every approval action.
+
+DEMO_MODE (default false, zero change to normal behavior): when true, skips
+importing agent.email_handler entirely — that module pulls in chromadb,
+sentence-transformers/torch, and langchain_* at module level just to reach
+send_reply(), which a demo deployment has no use for and shouldn't have to
+carry the weight or the real-Gmail-credential risk of. Approve/Edit&Approve
+still update status locally; they just don't actually send.
 """
+
+import os
 
 import streamlit as st
 from agent.analytics import log_interaction
-from agent.email_handler import send_reply
-from agent.db import load_pending_drafts, mark_as_processed, count_processed
+from agent.db import load_pending_drafts, mark_as_processed, count_processed, get_conn, init_db
+
+DEMO_MODE = os.getenv("DEMO_MODE", "false").strip().lower() == "true"
+
+if not DEMO_MODE:
+    from agent.email_handler import send_reply
+else:
+    # data/ is gitignored, so a fresh clone (e.g. Streamlit Cloud spinning up
+    # a new container) has no drafts.db at all. Self-seed once per cold boot
+    # rather than committing a binary db file to git — cheap (one COUNT
+    # query) on every rerun, only does real work the first time the table's
+    # actually empty. Also means the demo quietly resets to a clean state
+    # whenever the container restarts, instead of drifting from visitor clicks.
+    init_db()
+    with get_conn() as _conn:
+        if _conn.execute("SELECT COUNT(*) FROM drafts").fetchone()[0] == 0:
+            from scripts.seed_demo_data import seed
+            seed()
 
 st.set_page_config(
     page_title="Dental CS Agent — Review Dashboard",
@@ -20,6 +45,23 @@ st.set_page_config(
 )
 
 st.title("Dental CS Agent — Review Dashboard")
+if DEMO_MODE:
+    st.caption(":information_source: Running in demo mode — replies are logged but not actually sent.")
+
+
+def _maybe_send_reply(to_address: str, subject: str, reply_body: str,
+                       original_message_id: str) -> bool:
+    """
+    Send the reply unless DEMO_MODE is on, in which case it's a no-op that
+    reports success — the draft still gets marked processed either way, the
+    demo just never touches real SMTP.
+    """
+    if DEMO_MODE:
+        return True
+    return send_reply(
+        to_address=to_address, subject=subject,
+        reply_body=reply_body, original_message_id=original_message_id,
+    )
 
 
 def _handle_action(message_id: str, action: str,
@@ -55,6 +97,7 @@ if not drafts:
     st.info("No pending drafts. The agent will populate this list "
             "as new emails arrive.")
     st.caption("Queue: data/drafts.db")
+    st.caption("Auto-sent replies bypass this queue — see the Ops Dashboard page for those.")
 else:
     st.markdown(f"**{len(drafts)} draft(s) awaiting review**")
     st.divider()
@@ -130,7 +173,7 @@ else:
                         else:
                             to_address = raw_from.strip()
 
-                        sent = send_reply(
+                        sent = _maybe_send_reply(
                             to_address=to_address,
                             subject=draft.get("subject", ""),
                             reply_body=edited_reply,
@@ -138,7 +181,9 @@ else:
                         )
                         _handle_action(message_id, "approved",
                                        edited_reply, human_edited)
-                        if sent:
+                        if DEMO_MODE:
+                            st.info("Demo mode — reply logged but not actually sent.")
+                        elif sent:
                             st.success("Reply sent and logged.")
                         else:
                             st.error("Reply logged but failed to send — check terminal for details.")
@@ -153,14 +198,16 @@ else:
                         else:
                             to_address = raw_from.strip()
 
-                        sent = send_reply(
+                        sent = _maybe_send_reply(
                             to_address=to_address,
                             subject=draft.get("subject", ""),
                             reply_body=edited_reply,
                             original_message_id=draft.get("message_id", "")
                         )
                         _handle_action(message_id, "edited", edited_reply, True)
-                        if sent:
+                        if DEMO_MODE:
+                            st.info("Demo mode — edited reply logged but not actually sent.")
+                        elif sent:
                             st.success("Edited reply sent and logged.")
                         else:
                             st.error("Edited reply logged but failed to send — check terminal for details.")
@@ -184,6 +231,7 @@ with st.sidebar:
     st.metric("Processed total", count_processed())
 
     st.divider()
-    st.caption("Run `python analytics.py` for full accuracy report.")
+    st.caption("Run `python -m agent.analytics` for accuracy + shadow-mode calibration.")
     st.caption("Queue: `data/drafts.db`")
     st.caption("Log: `data/interaction_log.jsonl`")
+    st.caption("Auto-sent replies bypass this queue — see Ops Dashboard.")
