@@ -39,8 +39,11 @@ DEMO_DRAFTS = [
         subject="Pricing for full-ceramic zirconia crowns",
         body="Hi, could you send us the current price list for full-ceramic zirconia crowns? We have a batch of 12 coming up.",
         intent="PRICING", language="en", escalate=False, confidence=0.94,
-        draft_reply="Thank you for reaching out. Our full-ceramic zirconia crowns are priced at $X per unit for standard shading, "
-                    "with volume pricing available for batches of 10+. I've attached our current price list for reference.",
+        draft_reply="Dear Riverside Dental Lab team,\n\n"
+                    "Thank you for reaching out. Our full-ceramic zirconia crowns are priced at $X per unit for standard shading, "
+                    "with volume pricing available for batches of 10+. I've attached our current price list for reference.\n\n"
+                    "Please let us know if you'd like to proceed with the order or have any further questions.\n\n"
+                    "Best regards,\nCustomer Service Team",
         sources=["pricing.txt"], retrieval_score=0.87,
         status="approved", final_reply=None, human_edited=False,
         prompt_tokens=310, output_tokens=95, total_tokens=405, cost_usd=0.000335,
@@ -52,8 +55,11 @@ DEMO_DRAFTS = [
         subject="Recommandation de matériau pour bruxisme",
         body="Quel matériau recommandez-vous pour une couronne antérieure chez un patient bruxeur ?",
         intent="MATERIAL", language="fr", escalate=False, confidence=0.91,
-        draft_reply="Merci pour votre question. Pour un patient bruxeur, nous recommandons généralement une couronne en "
-                    "zircone monolithique pour sa résistance supérieure à la fracture.",
+        draft_reply="Bonjour,\n\n"
+                    "Merci pour votre question. Pour un patient bruxeur, nous recommandons généralement une couronne en "
+                    "zircone monolithique pour sa résistance supérieure à la fracture.\n\n"
+                    "N'hésitez pas à nous contacter pour toute question complémentaire.\n\n"
+                    "Cordialement,\nL'équipe du service client",
         sources=["materials.txt", "tech_selection.md"], retrieval_score=0.82,
         status="approved", final_reply=None, human_edited=False,
         prompt_tokens=280, output_tokens=88, total_tokens=368, cost_usd=0.000304,
@@ -65,7 +71,10 @@ DEMO_DRAFTS = [
         subject="订单进度查询 - Order #4521",
         body="你好，想咨询一下订单 #4521 目前的生产进度，谢谢。",
         intent="PROGRESS", language="zh", escalate=False, confidence=0.96,
-        draft_reply="您好，感谢您的咨询。订单 #4521 目前正在生产中，预计还需 3-4 个工作日完成，我们会在发货后第一时间通知您。",
+        draft_reply="您好，\n\n"
+                    "感谢您的咨询。订单 #4521 目前正在生产中，预计还需 3-4 个工作日完成，我们会在发货后第一时间通知您。\n\n"
+                    "如有其他问题，欢迎随时联系我们。\n\n"
+                    "此致\n客服团队",
         sources=["order_process.txt"], retrieval_score=0.90,
         status="auto_sent", final_reply=None, human_edited=False,
         prompt_tokens=245, output_tokens=70, total_tokens=315, cost_usd=0.000249,
@@ -77,8 +86,11 @@ DEMO_DRAFTS = [
         subject="Shade matching question for anterior bridge",
         body="We're having trouble getting an exact shade match on a 3-unit anterior bridge case — any guidance on your process?",
         intent="TECHNICAL", language="en", escalate=False, confidence=0.85,
-        draft_reply="Great question — for anterior bridge cases we recommend submitting a digital shade photo under natural "
-                    "light alongside the physical shade tab for our technicians to cross-reference.",
+        draft_reply="Dear Pinecrest Family Dentistry team,\n\n"
+                    "Great question — for anterior bridge cases we recommend submitting a digital shade photo under natural "
+                    "light alongside the physical shade tab for our technicians to cross-reference.\n\n"
+                    "Feel free to send the photo over and we'll take a look right away.\n\n"
+                    "Best regards,\nCustomer Service Team",
         sources=["tech_selection.md"], retrieval_score=0.71,
         status="pending_review", final_reply=None, human_edited=False,
         prompt_tokens=390, output_tokens=110, total_tokens=500, cost_usd=0.000392,
@@ -115,8 +127,11 @@ DEMO_DRAFTS = [
         subject="Precio de coronas de disilicato de litio",
         body="¿Podrían indicarnos el precio actual de las coronas de disilicato de litio para dientes posteriores?",
         intent="PRICING", language="es", escalate=False, confidence=0.88,
-        draft_reply="Gracias por su consulta. El precio de nuestras coronas de disilicato de litio para dientes "
-                    "posteriores es de $X por unidad, con descuentos disponibles para pedidos de mayor volumen.",
+        draft_reply="Estimado equipo de Clínica Dental Esperanza,\n\n"
+                    "Gracias por su consulta. El precio de nuestras coronas de disilicato de litio para dientes "
+                    "posteriores es de $X por unidad, con descuentos disponibles para pedidos de mayor volumen.\n\n"
+                    "Quedamos a su disposición para cualquier consulta adicional.\n\n"
+                    "Saludos cordiales,\nEquipo de Atención al Cliente",
         sources=["pricing.txt"], retrieval_score=0.68,
         status="pending_review", final_reply=None, human_edited=False,
         prompt_tokens=300, output_tokens=92, total_tokens=392, cost_usd=0.000319,
@@ -128,8 +143,11 @@ DEMO_DRAFTS = [
         subject="Zirconia vs e.max for molar crown",
         body="For a molar crown on a heavy grinder, would you recommend zirconia or e.max? Trying to decide before we submit the case.",
         intent="MATERIAL", language="en", escalate=False, confidence=0.93,
-        draft_reply="For a heavy grinder on a molar, we'd recommend monolithic zirconia over e.max — it offers "
-                    "significantly better fracture resistance under high occlusal load.",
+        draft_reply="Dear Golden Gate Dental Studio team,\n\n"
+                    "For a heavy grinder on a molar, we'd recommend monolithic zirconia over e.max — it offers "
+                    "significantly better fracture resistance under high occlusal load.\n\n"
+                    "Let us know if you'd like to move forward with this option for the case.\n\n"
+                    "Best regards,\nCustomer Service Team",
         sources=["materials.txt"], retrieval_score=0.79,
         status="approved", final_reply=None, human_edited=False,
         prompt_tokens=295, output_tokens=90, total_tokens=385, cost_usd=0.0000714,  # partly DeepSeek-priced (cheaper)
@@ -141,8 +159,11 @@ DEMO_DRAFTS = [
         subject="Status van bestelling #7734",
         body="Kunt u ons laten weten wat de huidige status is van bestelling #7734?",
         intent="PROGRESS", language="nl", escalate=False, confidence=0.79,
-        draft_reply="Bedankt voor uw bericht. Bestelling #7734 bevindt zich momenteel in de afwerkingsfase en zou "
-                    "over 2-3 werkdagen verzendklaar moeten zijn.",
+        draft_reply="Beste Tandartspraktijk De Wit,\n\n"
+                    "Bedankt voor uw bericht. Bestelling #7734 bevindt zich momenteel in de afwerkingsfase en zou "
+                    "over 2-3 werkdagen verzendklaar moeten zijn.\n\n"
+                    "Heeft u nog vragen, laat het ons gerust weten.\n\n"
+                    "Met vriendelijke groet,\nKlantenserviceteam",
         sources=["order_process.txt"], retrieval_score=0.60,
         status="pending_review", final_reply=None, human_edited=False,
         prompt_tokens=250, output_tokens=75, total_tokens=325, cost_usd=0.000263,
@@ -154,7 +175,10 @@ DEMO_DRAFTS = [
         subject="全瓷冠价格咨询",
         body="您好，请问全瓷冠现在的价格是多少？我们打算下个月批量订购。",
         intent="PRICING", language="zh", escalate=False, confidence=0.97,
-        draft_reply="您好，感谢您的咨询。全瓷冠目前的标准价格为每颗 $X，如批量订购（10 颗以上）可享受优惠价格，详情请见附件报价单。",
+        draft_reply="您好，\n\n"
+                    "感谢您的咨询。全瓷冠目前的标准价格为每颗 $X，如批量订购（10 颗以上）可享受优惠价格，详情请见附件报价单。\n\n"
+                    "如需进一步沟通订购细节，欢迎随时联系我们。\n\n"
+                    "此致\n客服团队",
         sources=["pricing.txt"], retrieval_score=0.93,
         status="auto_sent", final_reply=None, human_edited=False,
         prompt_tokens=270, output_tokens=80, total_tokens=350, cost_usd=0.000281,
@@ -166,8 +190,11 @@ DEMO_DRAFTS = [
         subject="Occlusal adjustment guidance for night guard",
         body="Any guidance on occlusal adjustment for a hard night guard on a patient with a deep bite?",
         intent="TECHNICAL", language="en", escalate=False, confidence=0.72,
-        draft_reply="For a deep bite case, we generally recommend a slightly thicker guard in the anterior region "
-                    "with even contact distribution — happy to review the specific case if you can send the scan.",
+        draft_reply="Dear Coastal Dental Arts team,\n\n"
+                    "For a deep bite case, we generally recommend a slightly thicker guard in the anterior region "
+                    "with even contact distribution — happy to review the specific case if you can send the scan.\n\n"
+                    "Looking forward to hearing from you.\n\n"
+                    "Best regards,\nCustomer Service Team",
         sources=["tech_selection.md"], retrieval_score=0.55,
         status="pending_review", final_reply=None, human_edited=False,
         prompt_tokens=410, output_tokens=120, total_tokens=530, cost_usd=0.000423,
@@ -191,10 +218,15 @@ DEMO_DRAFTS = [
         subject="Devis pour bridge en zircone",
         body="Pourriez-vous nous envoyer un devis pour un bridge de 3 éléments en zircone ?",
         intent="PRICING", language="fr", escalate=False, confidence=0.89,
-        draft_reply="Merci pour votre demande. Pour un bridge de 3 éléments en zircone, le prix est de $X, transport inclus.",
+        draft_reply="Bonjour,\n\n"
+                    "Merci pour votre demande. Pour un bridge de 3 éléments en zircone, le prix est de $X, transport inclus.\n\n"
+                    "Cordialement,\nL'équipe du service client",
         sources=["pricing.txt"], retrieval_score=0.74,
-        status="edited", final_reply="Merci pour votre demande. Pour un bridge de 3 éléments en zircone monolithique, "
-                                      "le tarif est de $X TTC, livraison sous 10 jours ouvrés incluse.",
+        status="edited", final_reply="Bonjour,\n\n"
+                                      "Merci pour votre demande. Pour un bridge de 3 éléments en zircone monolithique, "
+                                      "le tarif est de $X TTC, livraison sous 10 jours ouvrés incluse.\n\n"
+                                      "N'hésitez pas à nous contacter pour toute précision.\n\n"
+                                      "Cordialement,\nL'équipe du service client",
         human_edited=True,
         prompt_tokens=305, output_tokens=95, total_tokens=400, cost_usd=0.000330,
         used_fallback=False, would_auto_send=False,
@@ -205,8 +237,11 @@ DEMO_DRAFTS = [
         subject="Material options for allergy-sensitive patient",
         body="We have a patient with a known nickel sensitivity — what crown material options would you suggest?",
         intent="MATERIAL", language="en", escalate=False, confidence=0.81,
-        draft_reply="For patients with nickel sensitivity, we'd recommend a metal-free option such as zirconia or "
-                    "e.max — both are fully biocompatible and avoid any nickel-containing alloys.",
+        draft_reply="Dear Northgate Dental Lab team,\n\n"
+                    "For patients with nickel sensitivity, we'd recommend a metal-free option such as zirconia or "
+                    "e.max — both are fully biocompatible and avoid any nickel-containing alloys.\n\n"
+                    "Happy to discuss further if you'd like more detail on either option.\n\n"
+                    "Best regards,\nCustomer Service Team",
         sources=["materials.txt"], retrieval_score=0.65,
         status="pending_review", final_reply=None, human_edited=False,
         prompt_tokens=285, output_tokens=85, total_tokens=370, cost_usd=0.000297,
@@ -218,8 +253,11 @@ DEMO_DRAFTS = [
         subject="Following up on order #8812 status",
         body="Just following up — where does order #8812 stand? We'd like to give the patient an update.",
         intent="PROGRESS", language="en", escalate=False, confidence=0.95,
-        draft_reply="Thanks for checking in — order #8812 has completed quality inspection and is scheduled to ship "
-                    "tomorrow. You'll receive a tracking notification once it's on its way.",
+        draft_reply="Dear Willowbrook Dental Group team,\n\n"
+                    "Thanks for checking in — order #8812 has completed quality inspection and is scheduled to ship "
+                    "tomorrow. You'll receive a tracking notification once it's on its way.\n\n"
+                    "Please let us know if there's anything else we can help with.\n\n"
+                    "Best regards,\nCustomer Service Team",
         sources=["order_process.txt"], retrieval_score=0.88,
         status="approved", final_reply=None, human_edited=False,
         prompt_tokens=260, output_tokens=78, total_tokens=338, cost_usd=0.000273,
