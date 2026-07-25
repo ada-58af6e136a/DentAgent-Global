@@ -211,6 +211,9 @@ def _generate_hypothesis(email_body: str) -> str:
         prompt = (
             "Write a 2–3 sentence knowledge-base answer for this dental lab inquiry. "
             "Use formal product terminology: product names, materials, prices, lead times. "
+            "If the inquiry asks broadly about a category (e.g. 'what dentures do you offer') "
+            "rather than one specific product, briefly name each relevant product type in that "
+            "category rather than answering as if only one was asked about. "
             "Output only the answer, nothing else.\n\n"
             f"Inquiry:\n{email_body[:500]}"
         )
