@@ -21,6 +21,9 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 from openai import OpenAI
+from openai import (
+    APIConnectionError, APITimeoutError, InternalServerError, RateLimitError,
+)
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -31,7 +34,15 @@ _client: genai.Client | None = None
 
 
 def get_client() -> genai.Client:
-    """Return the shared genai.Client, creating it on first call (thread-safe)."""
+    """
+    Return the shared genai.Client, creating it on first call (thread-safe).
+
+    Gemini is the fallback provider for text generation (see
+    generate_content_tracked()) — this is still unconditionally required
+    though, because agent/rag_chain.py's retrieval step uses
+    GoogleGenerativeAIEmbeddings, which only Gemini provides. DeepSeek has no
+    embeddings API, so Gemini can never be fully removed from this project.
+    """
     global _client
     if _client is not None:
         return _client
@@ -45,10 +56,8 @@ def get_client() -> genai.Client:
     return _client
 
 
-# ── DeepSeek failover client ──────────────────────────────────────────────────
-# Only ever constructed if Gemini has a transient failure — see
-# generate_content_tracked(). No DEEPSEEK_API_KEY + Gemini never fails = this
-# is never touched.
+# ── DeepSeek: primary text-generation provider ────────────────────────────────
+# Gemini covers for it on a transient failure — see generate_content_tracked().
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 # deepseek-chat is deprecated 2026-07-24 and maps to deepseek-v4-flash's
 # non-thinking mode — target that model directly instead of the alias.
@@ -78,11 +87,21 @@ def _is_transient(exc: BaseException) -> bool:
     """
     True for rate-limit / quota / availability / timeout errors — the class of
     failure that's worth retrying or failing over for, as opposed to a config
-    or request-shape bug that a retry/failover won't fix.
+    or request-shape bug that a retry/failover won't fix (e.g. a missing
+    DEEPSEEK_API_KEY raises an auth error here — stays non-transient, fails
+    loud instead of silently rerouting to Gemini and masking the config bug).
+
+    Checks typed OpenAI-SDK exceptions first (DeepSeek is OpenAI-compatible)
+    — more precise than string matching for connection-level failures that
+    don't necessarily mention "429"/"timeout" in their message. Falls back to
+    Gemini's string-based error shapes, which don't have typed exceptions
+    exposed the same way.
 
     Single copy shared by classifier.py, rag_chain.py (their @retry decorators)
-    and generate_content_tracked() (the Gemini→DeepSeek failover decision below).
+    and generate_content_tracked() (the DeepSeek→Gemini failover decision below).
     """
+    if isinstance(exc, (RateLimitError, APITimeoutError, APIConnectionError, InternalServerError)):
+        return True
     msg = str(exc)
     return (
         "503" in msg or "UNAVAILABLE" in msg
@@ -185,8 +204,15 @@ def _track_usage(provider: str, prompt_tokens: int, output_tokens: int, total_to
         totals["fallback_calls"] += 1
 
 
-def _call_deepseek(contents) -> "_TextResponse":
-    """Send the same prompt to DeepSeek (non-thinking mode) and track its usage."""
+def _call_deepseek(contents, fallback: bool = False) -> "_TextResponse":
+    """
+    Send the prompt to DeepSeek (non-thinking mode) and track its usage.
+
+    fallback marks whether this call is itself covering for a Gemini failure
+    — ordinarily False, since DeepSeek is the primary provider. Kept as a
+    parameter (not hardcoded) so the primary/fallback roles stay a one-line
+    swap in generate_content_tracked() rather than requiring changes here.
+    """
     text = _extract_text(contents)
     response = get_deepseek_client().chat.completions.create(
         model=DEEPSEEK_MODEL,
@@ -208,35 +234,20 @@ def _call_deepseek(contents) -> "_TextResponse":
         cache_miss_tokens = prompt_tokens
 
     cost = _estimate_deepseek_cost_usd(cache_hit_tokens, cache_miss_tokens, output_tokens)
-    _track_usage("deepseek", prompt_tokens, output_tokens, total_tokens, cost, fallback=True)
+    _track_usage("deepseek", prompt_tokens, output_tokens, total_tokens, cost, fallback=fallback)
 
     reply_text = response.choices[0].message.content or ""
     return _TextResponse(reply_text)
 
 
-def generate_content_tracked(model: str, contents):
+def _call_gemini(model: str, contents, fallback: bool = False):
     """
-    Call Gemini and track token usage/cost into the current context's totals
-    (see start_usage_tracking/get_usage_totals). On a transient Gemini failure
-    (quota/availability/timeout — see _is_transient), fails over to DeepSeek
-    once; a non-transient error (e.g. bad request, auth) raises immediately
-    without failover, since rerouting won't fix a config bug.
-
-    If DeepSeek also fails, the ORIGINAL Gemini exception is re-raised — same
-    failure shape as before this feature existed, so the existing @retry
-    decorators on classify_intent/generate_reply keep working unchanged.
+    Call Gemini and track its usage. fallback marks whether this call is
+    covering for a DeepSeek failure — ordinarily True, since Gemini is now
+    the fallback provider for text generation (see module-level notes on
+    get_client() for why Gemini can't be removed entirely: embeddings).
     """
-    try:
-        response = get_client().models.generate_content(model=model, contents=contents)
-    except Exception as gemini_exc:
-        if not _is_transient(gemini_exc):
-            raise
-        log.warning("Gemini transient error (%s) — failing over to DeepSeek", gemini_exc)
-        try:
-            return _call_deepseek(contents)
-        except Exception as deepseek_exc:
-            log.error("DeepSeek failover also failed: %s", deepseek_exc)
-            raise gemini_exc from None
+    response = get_client().models.generate_content(model=model, contents=contents)
 
     usage = getattr(response, "usage_metadata", None)
     if usage is not None:
@@ -244,6 +255,34 @@ def generate_content_tracked(model: str, contents):
         output_tokens = getattr(usage, "candidates_token_count", 0) or 0
         total_tokens = getattr(usage, "total_token_count", 0) or (prompt_tokens + output_tokens)
         cost = _estimate_gemini_cost_usd(prompt_tokens, output_tokens)
-        _track_usage("gemini", prompt_tokens, output_tokens, total_tokens, cost)
+        _track_usage("gemini", prompt_tokens, output_tokens, total_tokens, cost, fallback=fallback)
 
     return response
+
+
+def generate_content_tracked(model: str, contents):
+    """
+    DeepSeek-primary, Gemini-fallback for text generation. `model` names the
+    Gemini model to use only if/when falling back to it (e.g. "gemini-2.5-flash").
+
+    On a transient DeepSeek failure (quota/availability/timeout/connection —
+    see _is_transient), fails over to Gemini once; a non-transient error
+    (e.g. bad request, missing DEEPSEEK_API_KEY) raises immediately without
+    failover, since rerouting won't fix a config bug.
+
+    If Gemini also fails, the ORIGINAL DeepSeek exception is re-raised — same
+    failure shape regardless of whether failover exists at all, so the
+    existing @retry decorators on classify_intent/generate_reply keep
+    working unchanged.
+    """
+    try:
+        return _call_deepseek(contents, fallback=False)
+    except Exception as deepseek_exc:
+        if not _is_transient(deepseek_exc):
+            raise
+        log.warning("DeepSeek transient error (%s) — failing over to Gemini", deepseek_exc)
+        try:
+            return _call_gemini(model, contents, fallback=True)
+        except Exception as gemini_exc:
+            log.error("Gemini failover also failed: %s", gemini_exc)
+            raise deepseek_exc from None
