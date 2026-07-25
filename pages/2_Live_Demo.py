@@ -1,5 +1,5 @@
 """
-pages/2_🧪_Live_Demo.py
+pages/2_Live_Demo.py
 
 Paste a client email, click Run, see the REAL pipeline output — genuine
 classify_intent() + generate_reply() calls (DeepSeek primary / Gemini
@@ -24,6 +24,7 @@ calls needs a cost/abuse ceiling. Two layers:
 """
 
 import os
+import threading
 import time
 
 import streamlit as st
@@ -44,6 +45,29 @@ st.caption(
     "canned data. A real call can take anywhere from a few seconds to "
     "significantly longer depending on provider load."
 )
+
+# Pre-warm chroma_db in the background as soon as this page loads, instead
+# of waiting for the first Run click. On a freshly-woken container, chroma_db
+# doesn't exist yet (see agent/rag_chain.py's auto-build) — building it takes
+# ~80s+ (Gemini embedding, rate-limited in batches). Stacking that on top of
+# the actual classify+retrieve+generate calls in a single click can run long
+# enough to trip a proxy/websocket timeout, which silently resets the page
+# with no visible error. Starting the build the moment the page loads means
+# it's likely already warm by the time a visitor finishes typing and clicks
+# Run. Safe under concurrent visitors: _ensure_initialized() already
+# serializes on a lock and no-ops once done (agent/rag_chain.py), so multiple
+# sessions landing here around the same time just wait on the same build.
+if "kb_prewarm_started" not in st.session_state:
+    st.session_state.kb_prewarm_started = True
+
+    def _prewarm_kb() -> None:
+        try:
+            from agent.rag_chain import _ensure_initialized
+            _ensure_initialized()
+        except Exception:
+            pass  # a real failure here surfaces normally on the actual Run click
+
+    threading.Thread(target=_prewarm_kb, daemon=True).start()
 
 if "live_demo_run_count" not in st.session_state:
     st.session_state.live_demo_run_count = 0
