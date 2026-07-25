@@ -13,9 +13,10 @@ import json
 import math
 import sqlite3
 from datetime import datetime, timezone
-from pathlib import Path
 
-_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "drafts.db"
+from .paths import DATA_DIR
+
+_DB_PATH = DATA_DIR / "drafts.db"
 
 
 def get_conn() -> sqlite3.Connection:

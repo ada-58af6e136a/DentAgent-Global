@@ -29,9 +29,12 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 sys.path.insert(0, str(Path(__file__).parent))
 from document_loader import load_and_chunk
 
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-CHROMA_DIR = PROJECT_ROOT / "chroma_db"
+# Also need the project root importable for `from agent.paths import ...` below
+# — present automatically when this module is imported from within the app
+# (e.g. agent/rag_chain.py's auto-build), but not when run standalone via
+# `python scripts/build_kb.py`.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from agent.paths import PROJECT_ROOT, CHROMA_DIR
 
 
 def build_knowledge_base(reset: bool = False):

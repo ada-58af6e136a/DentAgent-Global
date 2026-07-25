@@ -309,14 +309,47 @@ actually demonstrating the product instead of a static mockup of it.
    primary)
 5. Deploy
 
-### Known limitation: this doesn't cover the live backend
+### Stage 2: the real backend (private — do not share this link)
 
-Streamlit Community Cloud runs a single app process — it has no facility for
-also running `run_handler.py` (the IMAP polling loop) as a second, always-on
-worker. Running the full pipeline live (not just the dashboard demo) will
-need a platform that supports multi-service deploys (e.g. Railway, Render,
-Fly.io) with a real shared database instead of local SQLite. Not covered
-here — this section is deliberately scoped to the demo-only deployment.
+Streamlit Community Cloud (above) runs a single app process — it has no
+facility for also running `run_handler.py` (the IMAP polling loop) as a
+second, always-on worker. This section covers actually running the full
+pipeline live, on [Railway](https://railway.com), which does support that.
+
+**This is a completely separate deployment from the public demo above, and
+it is not meant to be shared publicly.** The demo deployment uses
+`DEMO_MODE=true` and synthetic data specifically so a public link is safe to
+hand to anyone. This deployment processes real inbound email into real
+drafts — sharing its link would expose real correspondence to anyone who
+opens it. Keep the two deployments mentally (and literally) separate.
+
+**Why Railway, and why one service, not two:** Railway services get exactly
+one persistent volume each — there's no way for two separate services (say,
+a "web" service and a "worker" service) to share the same SQLite file and
+chroma_db on this platform without a real networked database instead of
+local disk. Rather than migrate to Postgres for this first pass, both
+`app.py` and `run_handler.py` run in **one** service, as two processes
+sharing that service's one volume (`start.sh` backgrounds `run_handler.py`
+and runs `streamlit` in the foreground — Railway's `railway.json` points the
+service at it). `agent/paths.py` is what makes this possible: every module
+that used to hardcode its own path under the project root now derives
+`DATA_DIR`/`CHROMA_DIR` from one `PERSISTENT_DATA_DIR` env var instead —
+unset (local dev, the public demo) it's identical to before; set it to the
+volume's mount path and everything that needs to persist lands together.
+
+**Setup:**
+
+1. On [railway.com](https://railway.com): **New Project** → **Deploy from GitHub repo** → this repo/branch
+2. Add a **Volume** to the service (Settings → Volumes), note its mount path
+3. Environment variables (Settings → Variables):
+   - `PERSISTENT_DATA_DIR` = the volume's mount path from step 2
+   - `DEEPSEEK_API_KEY`, `GEMINI_API_KEY` — both required, see "LLM failover" above
+   - `GMAIL_EMAIL`, `GMAIL_PASSWORD` — **use a test/dedicated Gmail account for the initial run, not the real production inbox** (your call on when to switch)
+   - `AUTO_SEND_ENABLED=false` — explicit, don't rely on the default. This phase is about accumulating real shadow-mode calibration data (see "Auto-send" above), not sending anything automatically
+   - `DEMO_MODE` — leave unset (this is the real app, not the demo)
+4. Deploy. Railway auto-detects the Python build; `railway.json` sets the start command to `bash start.sh`
+5. This gives you two things running in one place: `run_handler.py` polling the test inbox into real drafts, and the same review-dashboard UI as the demo (but showing real drafts, `DEMO_MODE` off — Approve really sends via that test account's SMTP)
+6. Once you trust it, run `python -m agent.analytics` against this deployment's data to see real shadow-mode calibration numbers accumulate — that's the actual prerequisite for ever considering `AUTO_SEND_ENABLED=true`, not a fixed number of test emails
 
 ---
 

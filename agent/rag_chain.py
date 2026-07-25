@@ -14,11 +14,9 @@ from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_excep
 from .api_client import generate_content_tracked, _is_transient
 from .system_prompt import SYSTEM_PROMPT
 from .logger import get_logger
+from .paths import PROJECT_ROOT, CHROMA_DIR
 
 log = get_logger(__name__)
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CHROMA_DIR = PROJECT_ROOT / "chroma_db"
 
 load_dotenv(PROJECT_ROOT / ".env")
 

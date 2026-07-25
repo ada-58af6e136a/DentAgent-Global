@@ -13,11 +13,11 @@ from pathlib import Path
 
 from .db import get_shadow_mode_calibration
 from .logger import get_logger
+from .paths import DATA_DIR
 
 log = get_logger(__name__)
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-LOG_FILE = str(_PROJECT_ROOT / "data" / "interaction_log.jsonl")
+LOG_FILE = str(DATA_DIR / "interaction_log.jsonl")
 
 
 def log_interaction(
