@@ -43,6 +43,10 @@ DentAgent-Global/
 │   ├── archive_old_drafts.py # Move old terminal-state drafts to drafts_archive
 │   └── seed_demo_data.py    # Populate data/drafts.db with synthetic demo drafts
 │
+├── pages/                   # Streamlit multipage app (alongside app.py)
+│   ├── 1_📊_Ops_Dashboard.py # Volume, latency, cost, health, auto-send audit
+│   └── 2_🧪_Live_Demo.py     # Real pipeline run on visitor-pasted email text
+│
 ├── tests/                   # Test scripts
 │   ├── test_imap.py         # Verify Gmail IMAP connection
 │   ├── test_gemini.py       # Verify Gemini API connection
@@ -89,7 +93,9 @@ pip install -r requirements.txt
 # 4. Configure credentials
 cp .env.example .env
 # Edit .env and fill in:
-#   GEMINI_API_KEY   — get one free at aistudio.google.com
+#   DEEPSEEK_API_KEY — primary text-generation provider, get one at platform.deepseek.com
+#   GEMINI_API_KEY   — required too (retrieval embeddings + text-generation fallback)
+#                      get one free at aistudio.google.com
 #   GMAIL_EMAIL      — the Gmail account used to send/receive
 #   GMAIL_PASSWORD   — Gmail App Password (not your login password)
 #                      Generate at: myaccount.google.com/apppasswords
@@ -208,14 +214,24 @@ failure. Visible on the Ops Dashboard as "circuit breaker: X/Y this hour."
 
 ### LLM failover
 
-Every Gemini call (`agent/api_client.py:generate_content_tracked()`) fails
-over to DeepSeek (`deepseek-v4-flash`, non-thinking mode) if Gemini returns a
-transient error — quota exhausted, 503, or timeout. Automatic only: there's no
-manual provider switch, and if `DEEPSEEK_API_KEY` isn't set the code behaves
-exactly as if this feature didn't exist (the original Gemini error just
-propagates, same as before). Per-email token cost is tracked using whichever
-provider actually served each call, and `data/drafts.db.used_fallback` records
-which emails needed it — visible as a metric on the Ops Dashboard.
+**DeepSeek (`deepseek-v4-flash`, non-thinking mode) is the primary provider**
+for text generation — classification and reply generation both go through it
+first. Every call (`agent/api_client.py:generate_content_tracked()`) fails
+over to Gemini if DeepSeek returns a transient error — rate limit, timeout,
+or connection failure (checked via typed OpenAI-SDK exceptions, not just
+string matching, so connection-level failures are caught precisely, not just
+429s/timeouts). Automatic only: there's no manual provider switch. A
+non-transient error (bad request, auth) raises immediately without failover,
+since rerouting won't fix a config bug.
+
+Gemini can't be removed from this project even though it's now the fallback
+for text generation — `agent/rag_chain.py`'s retrieval step depends on
+Gemini's embeddings API (`models/gemini-embedding-001`), which DeepSeek has
+no equivalent for. Both `DEEPSEEK_API_KEY` and `GEMINI_API_KEY` are required.
+
+Per-email token cost is tracked using whichever provider actually served
+each call, and `data/drafts.db.used_fallback` records which emails needed
+Gemini to cover for DeepSeek — visible as a metric on the Ops Dashboard.
 
 Cost is priced per call, not a single flat rate applied to a total afterward.
 DeepSeek's automatic context caching means input tokens are billed at one of
@@ -255,32 +271,43 @@ isn't latency-sensitive, so it doesn't belong in `email_handler.run_loop()`.
 
 ### Demo deployment (frontend only, no live email polling)
 
-A live demo (Review Dashboard + Ops Dashboard, using synthetic sample data)
-can run with **zero real secrets** and **none of the heavy ML dependencies**
-— `DEMO_MODE=true` makes `app.py` skip importing `agent.email_handler`
-entirely, which is what pulls in `chromadb` / `sentence-transformers` (and
-`torch`) / `langchain_*` in the first place. Approve/Edit&Approve still
-update draft status; they just don't call real SMTP.
+Two pages, two different jobs:
 
-`data/` is gitignored, so a fresh deploy has no `drafts.db` at all — `app.py`
-self-seeds synthetic data (`scripts/seed_demo_data.py`, original content, not
-derived from real interactions) automatically the first time it boots against
-an empty table. Nothing to run by hand for a deploy; the script is still
-there if you want to seed a local DB manually for testing.
+- **Review Dashboard (`app.py`) + Ops Dashboard** — browse a realistic
+  historical backlog (synthetic seed data, `scripts/seed_demo_data.py`,
+  original content not derived from real interactions). `DEMO_MODE=true`
+  makes `app.py` skip importing `agent.email_handler` entirely — that's what
+  pulls in `chromadb`/`sentence-transformers`/`torch`/`langchain_*` — and
+  Approve/Edit&Approve update status locally without calling real SMTP.
+  `data/` is gitignored, so `app.py` self-seeds the synthetic data
+  automatically the first time it boots against an empty table — nothing to
+  run by hand for a deploy.
+- **Live Demo (`pages/2_🧪_Live_Demo.py`)** — paste any email, get a real
+  `classify_intent()` + `generate_reply()` run against the actual pipeline
+  (DeepSeek primary, Gemini fallback, real `chroma_db` retrieval). This is
+  what actually demonstrates translation/generation quality, not just the UI.
+  Rate-limited two ways so a public unauthenticated page can't run up your
+  API bill: `LIVE_DEMO_SESSION_MAX` per browser session, and
+  `LIVE_DEMO_MAX_PER_HOUR` as a global cap across all visitors
+  (`agent/db.py:count_recent_live_demo_runs()`).
+
+Because the Live Demo page exists, the deploy needs the **full**
+`requirements.txt` — there's no way to run the real pipeline without
+`chromadb`/`sentence-transformers`/`torch`/`langchain_*`, so the earlier
+slim `requirements-demo.txt` build-speed optimization no longer applies.
+Slower cold start than the frontend-only version, but the demo is now
+actually demonstrating the product instead of a static mockup of it.
 
 **Deploy to [Streamlit Community Cloud](https://streamlit.io/cloud)** (free):
 
 1. Push this repo to GitHub (already set up: `ada-58af6e136a/DentAgent-Global`)
 2. On share.streamlit.io: **New app** → pick this repo/branch
 3. Main file path: `app.py`
-4. Advanced settings → **Python dependencies file**: `requirements-demo.txt`
-   (not `requirements.txt` — the slim file skips the ML stack the demo
-   doesn't use)
-5. Advanced settings → **Secrets**: add `DEMO_MODE = "true"`
-6. Deploy
-
-That's the only configuration the demo needs — no `GEMINI_API_KEY`, no
-Gmail credentials, nothing else.
+4. Advanced settings → **Secrets**: add `DEMO_MODE = "true"`,
+   `DEEPSEEK_API_KEY`, and `GEMINI_API_KEY` (both required — see "LLM
+   failover" above for why Gemini can't be dropped even though DeepSeek is
+   primary)
+5. Deploy
 
 ### Known limitation: this doesn't cover the live backend
 
