@@ -13,6 +13,9 @@ from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_excep
 
 from .api_client import generate_content_tracked, _is_transient
 from .system_prompt import SYSTEM_PROMPT
+from .logger import get_logger
+
+log = get_logger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CHROMA_DIR = PROJECT_ROOT / "chroma_db"
@@ -113,10 +116,16 @@ def _ensure_initialized() -> None:
             return
 
         if not CHROMA_DIR.exists():
-            raise RuntimeError(
-                f"ChromaDB not found at {CHROMA_DIR}. "
-                "Run: python scripts/build_kb.py"
-            )
+            # chroma_db/ is gitignored (it's a build artifact, not source) —
+            # a fresh deploy on ephemeral storage (e.g. Streamlit Community
+            # Cloud) never has it. Build it from knowledge_base/*.txt (which
+            # IS committed) on first use instead of crashing and requiring a
+            # manual `python scripts/build_kb.py` that can't be run on a
+            # read-only-except-for-this-process cloud container anyway.
+            log.info("chroma_db not found — building it now from knowledge_base/ "
+                      "(expected on first boot of a fresh deploy)")
+            from scripts.build_kb import build_knowledge_base
+            build_knowledge_base(reset=False)
 
         _embeddings = GoogleGenerativeAIEmbeddings(
             model="models/gemini-embedding-001",
