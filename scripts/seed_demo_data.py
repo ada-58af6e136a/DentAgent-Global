@@ -9,6 +9,14 @@ range of what the system does instead of an empty dashboard.
 None of this is derived from real interaction data. Clinic names, emails,
 and message content are invented for this script.
 
+would_auto_send is NOT hand-typed — it's computed by calling the real
+agent.auto_send_rules.meets_auto_send_criteria(), the exact same function
+the live pipeline uses. That import is deliberately lightweight (no
+chromadb/torch/langchain — see agent/auto_send_rules.py's docstring), so
+this still doesn't drag DEMO_MODE into the heavy dependency chain. This
+means the demo's auto-send flags can't silently drift out of sync with the
+real thresholds the way a hand-typed value could.
+
 Run from the project root:
     python scripts/seed_demo_data.py
 """
@@ -22,6 +30,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from agent.db import save_draft
+from agent.auto_send_rules import meets_auto_send_criteria
 
 random.seed(42)  # reproducible demo data across runs
 
@@ -47,7 +56,7 @@ DEMO_DRAFTS = [
         sources=["pricing.txt"], retrieval_score=0.87,
         status="approved", final_reply=None, human_edited=False,
         prompt_tokens=310, output_tokens=95, total_tokens=405, cost_usd=0.000335,
-        used_fallback=False, would_auto_send=True,
+        used_fallback=False,
     ),
     dict(
         message_id="<demo-002@dentagent-demo>", days_ago=8.7,
@@ -63,7 +72,7 @@ DEMO_DRAFTS = [
         sources=["materials.txt", "tech_selection.md"], retrieval_score=0.82,
         status="approved", final_reply=None, human_edited=False,
         prompt_tokens=280, output_tokens=88, total_tokens=368, cost_usd=0.000304,
-        used_fallback=False, would_auto_send=True,
+        used_fallback=False,
     ),
     dict(
         message_id="<demo-003@dentagent-demo>", days_ago=8.1,
@@ -78,7 +87,7 @@ DEMO_DRAFTS = [
         sources=["order_process.txt"], retrieval_score=0.90,
         status="auto_sent", final_reply=None, human_edited=False,
         prompt_tokens=245, output_tokens=70, total_tokens=315, cost_usd=0.000249,
-        used_fallback=False, would_auto_send=True,
+        used_fallback=False,
     ),
     dict(
         message_id="<demo-004@dentagent-demo>", days_ago=7.5,
@@ -94,7 +103,7 @@ DEMO_DRAFTS = [
         sources=["tech_selection.md"], retrieval_score=0.71,
         status="pending_review", final_reply=None, human_edited=False,
         prompt_tokens=390, output_tokens=110, total_tokens=500, cost_usd=0.000392,
-        used_fallback=False, would_auto_send=False,
+        used_fallback=False,
     ),
     dict(
         message_id="<demo-005@dentagent-demo>", days_ago=6.9,
@@ -106,7 +115,7 @@ DEMO_DRAFTS = [
         sources=[], retrieval_score=0.0,
         status="escalated", final_reply=None, human_edited=False,
         prompt_tokens=180, output_tokens=40, total_tokens=220, cost_usd=0.000154,
-        used_fallback=False, would_auto_send=False,
+        used_fallback=False,
     ),
     dict(
         message_id="<demo-006@dentagent-demo>", days_ago=6.3,
@@ -119,7 +128,7 @@ DEMO_DRAFTS = [
         sources=[], retrieval_score=0.0,
         status="escalated", final_reply=None, human_edited=False,
         prompt_tokens=165, output_tokens=38, total_tokens=203, cost_usd=0.000141,
-        used_fallback=False, would_auto_send=False,
+        used_fallback=False,
     ),
     dict(
         message_id="<demo-007@dentagent-demo>", days_ago=5.8,
@@ -135,7 +144,7 @@ DEMO_DRAFTS = [
         sources=["pricing.txt"], retrieval_score=0.68,
         status="pending_review", final_reply=None, human_edited=False,
         prompt_tokens=300, output_tokens=92, total_tokens=392, cost_usd=0.000319,
-        used_fallback=False, would_auto_send=False,
+        used_fallback=False,
     ),
     dict(
         message_id="<demo-008@dentagent-demo>", days_ago=5.2,
@@ -151,7 +160,7 @@ DEMO_DRAFTS = [
         sources=["materials.txt"], retrieval_score=0.79,
         status="approved", final_reply=None, human_edited=False,
         prompt_tokens=295, output_tokens=90, total_tokens=385, cost_usd=0.0000714,  # partly DeepSeek-priced (cheaper)
-        used_fallback=True, would_auto_send=True,
+        used_fallback=True,
     ),
     dict(
         message_id="<demo-009@dentagent-demo>", days_ago=4.6,
@@ -167,7 +176,7 @@ DEMO_DRAFTS = [
         sources=["order_process.txt"], retrieval_score=0.60,
         status="pending_review", final_reply=None, human_edited=False,
         prompt_tokens=250, output_tokens=75, total_tokens=325, cost_usd=0.000263,
-        used_fallback=False, would_auto_send=False,
+        used_fallback=False,
     ),
     dict(
         message_id="<demo-010@dentagent-demo>", days_ago=4.0,
@@ -182,7 +191,7 @@ DEMO_DRAFTS = [
         sources=["pricing.txt"], retrieval_score=0.93,
         status="auto_sent", final_reply=None, human_edited=False,
         prompt_tokens=270, output_tokens=80, total_tokens=350, cost_usd=0.000281,
-        used_fallback=False, would_auto_send=True,
+        used_fallback=False,
     ),
     dict(
         message_id="<demo-011@dentagent-demo>", days_ago=3.4,
@@ -198,7 +207,7 @@ DEMO_DRAFTS = [
         sources=["tech_selection.md"], retrieval_score=0.55,
         status="pending_review", final_reply=None, human_edited=False,
         prompt_tokens=410, output_tokens=120, total_tokens=530, cost_usd=0.000423,
-        used_fallback=False, would_auto_send=False,
+        used_fallback=False,
     ),
     dict(
         message_id="<demo-012@dentagent-demo>", days_ago=2.8,
@@ -210,7 +219,7 @@ DEMO_DRAFTS = [
         sources=[], retrieval_score=0.0,
         status="escalated", final_reply=None, human_edited=False,
         prompt_tokens=140, output_tokens=35, total_tokens=175, cost_usd=0.000123,
-        used_fallback=False, would_auto_send=False,
+        used_fallback=False,
     ),
     dict(
         message_id="<demo-013@dentagent-demo>", days_ago=2.1,
@@ -229,7 +238,7 @@ DEMO_DRAFTS = [
                                       "Cordialement,\nL'équipe du service client",
         human_edited=True,
         prompt_tokens=305, output_tokens=95, total_tokens=400, cost_usd=0.000330,
-        used_fallback=False, would_auto_send=False,
+        used_fallback=False,
     ),
     dict(
         message_id="<demo-014@dentagent-demo>", days_ago=1.5,
@@ -245,7 +254,7 @@ DEMO_DRAFTS = [
         sources=["materials.txt"], retrieval_score=0.65,
         status="pending_review", final_reply=None, human_edited=False,
         prompt_tokens=285, output_tokens=85, total_tokens=370, cost_usd=0.000297,
-        used_fallback=False, would_auto_send=False,
+        used_fallback=False,
     ),
     dict(
         message_id="<demo-015@dentagent-demo>", days_ago=0.6,
@@ -261,7 +270,7 @@ DEMO_DRAFTS = [
         sources=["order_process.txt"], retrieval_score=0.88,
         status="approved", final_reply=None, human_edited=False,
         prompt_tokens=260, output_tokens=78, total_tokens=338, cost_usd=0.000273,
-        used_fallback=False, would_auto_send=True,
+        used_fallback=False,
     ),
 ]
 
@@ -270,6 +279,19 @@ def seed() -> int:
     inserted = 0
     for d in DEMO_DRAFTS:
         timestamp = _ts(d["days_ago"])
+
+        # Computed, not hand-typed — see the module docstring. Calls the same
+        # function agent/email_handler.py:process_email() calls in production.
+        would_auto_send = meets_auto_send_criteria(
+            d["intent"], d["confidence"], d["retrieval_score"], d["escalate"], d["sender"],
+        )
+        if d["status"] == "auto_sent" and not would_auto_send:
+            raise ValueError(
+                f"{d['message_id']}: status='auto_sent' but meets_auto_send_criteria() "
+                f"says this wouldn't qualify — the demo data is inconsistent with the "
+                f"real thresholds, fix the entry's intent/confidence/retrieval_score."
+            )
+
         entry = {
             "message_id": d["message_id"],
             "timestamp": timestamp,
@@ -295,7 +317,7 @@ def seed() -> int:
             "total_tokens": d["total_tokens"],
             "estimated_cost_usd": d["cost_usd"],
             "used_fallback": d["used_fallback"],
-            "would_auto_send": d["would_auto_send"],
+            "would_auto_send": would_auto_send,
         }
         if save_draft(entry):
             inserted += 1

@@ -34,6 +34,7 @@ from .analytics import log_interaction
 from .db import save_draft, is_already_queued, update_health, count_recent_auto_sends
 from .api_client import start_usage_tracking, get_usage_totals
 from .alerts import send_slack_alert
+from .auto_send_rules import meets_auto_send_criteria, parse_to_address
 from .logger import get_logger
 
 log = get_logger(__name__)
@@ -47,30 +48,16 @@ SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
 
 # ── Auto-send ─────────────────────────────────────────────────────────────────
-# Off by default. When enabled, emails meeting all three thresholds below are
-# sent immediately without human review — see _meets_auto_send_criteria().
+# Off by default. When enabled, emails meeting all three thresholds in
+# agent.auto_send_rules are sent immediately without human review.
 #
-# Shadow mode is always on and needs no toggle: _meets_auto_send_criteria() is
+# Shadow mode is always on and needs no toggle: meets_auto_send_criteria() is
 # evaluated for every email regardless of AUTO_SEND_ENABLED, and the result is
 # persisted as drafts.would_auto_send. Since every human-reviewed draft already
 # has a real outcome (approved/edited/escalated), this silently accumulates
 # labeled calibration data for free — whether or not the feature is ever
 # turned on.
 AUTO_SEND_ENABLED = os.getenv("AUTO_SEND_ENABLED", "false").strip().lower() == "true"
-AUTO_SEND_INTENTS = {
-    s.strip() for s in os.getenv("AUTO_SEND_INTENTS", "PRICING,MATERIAL,PROGRESS").split(",")
-    if s.strip()
-}
-AUTO_SEND_CONFIDENCE_THRESHOLD = float(os.getenv("AUTO_SEND_CONFIDENCE_THRESHOLD", "0.9"))
-AUTO_SEND_RETRIEVAL_THRESHOLD = float(os.getenv("AUTO_SEND_RETRIEVAL_THRESHOLD", "0.5"))
-# Per-client override: emails or bare domains that should never be auto-sent
-# to regardless of confidence/score — e.g. a VIP account you always want a
-# human to personally handle. Matched case-insensitively against either the
-# sender's full address or its domain (with a leading "@").
-AUTO_SEND_EXCLUDED_CLIENTS = {
-    s.strip().lower() for s in os.getenv("AUTO_SEND_EXCLUDED_CLIENTS", "").split(",")
-    if s.strip()
-}
 # Circuit breaker: caps real auto-sends per rolling hour. Stateless — recomputed
 # from the DB each time via count_recent_auto_sends(), not a persisted flag.
 AUTO_SEND_MAX_PER_HOUR = int(os.getenv("AUTO_SEND_MAX_PER_HOUR", "20"))
@@ -207,48 +194,6 @@ def mark_seen(mail: imaplib.IMAP4_SSL, mid: bytes) -> None:
     mail.store(mid, "+FLAGS", "\\Seen")
 
 
-def _parse_to_address(raw_from: str) -> str:
-    """Extract the bare email address from a 'Display Name <addr>' header."""
-    if "<" in raw_from and ">" in raw_from:
-        return raw_from.split("<")[1].split(">")[0].strip()
-    return raw_from.strip()
-
-
-def _is_excluded_client(raw_from: str) -> bool:
-    """True if the sender is on AUTO_SEND_EXCLUDED_CLIENTS, by exact address or domain."""
-    if not AUTO_SEND_EXCLUDED_CLIENTS:
-        return False
-    email = _parse_to_address(raw_from).lower()
-    domain = "@" + email.split("@")[-1] if "@" in email else ""
-    return email in AUTO_SEND_EXCLUDED_CLIENTS or domain in AUTO_SEND_EXCLUDED_CLIENTS
-
-
-def _meets_auto_send_criteria(intent: str, confidence: float, retrieval_score: float,
-                               escalate: bool, sender: str) -> bool:
-    """
-    True if this email qualifies for auto-send — intent on the allow-list AND
-    both confidence and retrieval score clearing their thresholds AND not
-    escalated AND the sender isn't on AUTO_SEND_EXCLUDED_CLIENTS. Any one
-    weak signal disqualifies it.
-
-    Deliberately does NOT check AUTO_SEND_ENABLED — this is evaluated for
-    every email regardless (see the AUTO_SEND_ENABLED comment above), so the
-    "is the feature even on" gate lives at the call site in process_email(),
-    not here. That split is what makes shadow mode free: this function's
-    answer is recorded whether or not anything acts on it. The client
-    exclusion check lives *inside* this function rather than only gating the
-    real send — otherwise would_auto_send would say "yes" for a client that
-    could never actually qualify, which would be a lie in the calibration data.
-    """
-    if escalate or _is_excluded_client(sender):
-        return False
-    return (
-        intent in AUTO_SEND_INTENTS
-        and confidence >= AUTO_SEND_CONFIDENCE_THRESHOLD
-        and retrieval_score >= AUTO_SEND_RETRIEVAL_THRESHOLD
-    )
-
-
 def _circuit_breaker_tripped() -> bool:
     """True if the auto-send rate cap has been hit in the last rolling hour."""
     return count_recent_auto_sends(60) >= AUTO_SEND_MAX_PER_HOUR
@@ -368,7 +313,7 @@ def process_email(email_data):
 
     # Shadow mode: always compute and persist whether this email *would*
     # qualify, regardless of AUTO_SEND_ENABLED — see the comment on that flag.
-    would_send = _meets_auto_send_criteria(
+    would_send = meets_auto_send_criteria(
         intent, confidence, entry["retrieval_score"], escalate, email_data["from"]
     )
     entry["would_auto_send"] = would_send
@@ -381,7 +326,7 @@ def process_email(email_data):
                 AUTO_SEND_MAX_PER_HOUR, subject,
             )
         else:
-            to_address = _parse_to_address(email_data["from"])
+            to_address = parse_to_address(email_data["from"])
             sent = send_reply(
                 to_address=to_address,
                 subject=email_data["subject"],
