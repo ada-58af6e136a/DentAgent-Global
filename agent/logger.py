@@ -18,9 +18,9 @@ import logging
 import sys
 import time
 from logging.handlers import TimedRotatingFileHandler
-from pathlib import Path
 
-_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+from .paths import DATA_DIR as _DATA_DIR
+
 _LOG_FILE = _DATA_DIR / "agent.log"
 
 _configured: set = set()

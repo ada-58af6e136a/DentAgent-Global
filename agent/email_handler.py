@@ -31,7 +31,10 @@ from dotenv import load_dotenv
 from .classifier import classify_intent
 from .rag_chain import generate_reply
 from .analytics import log_interaction
-from .db import save_draft, is_already_queued
+from .db import save_draft, is_already_queued, update_health, count_recent_auto_sends
+from .api_client import start_usage_tracking, get_usage_totals
+from .alerts import send_slack_alert
+from .auto_send_rules import meets_auto_send_criteria, parse_to_address
 from .logger import get_logger
 
 log = get_logger(__name__)
@@ -43,6 +46,21 @@ IMAP_PORT = 993
 
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
+
+# ── Auto-send ─────────────────────────────────────────────────────────────────
+# Off by default. When enabled, emails meeting all three thresholds in
+# agent.auto_send_rules are sent immediately without human review.
+#
+# Shadow mode is always on and needs no toggle: meets_auto_send_criteria() is
+# evaluated for every email regardless of AUTO_SEND_ENABLED, and the result is
+# persisted as drafts.would_auto_send. Since every human-reviewed draft already
+# has a real outcome (approved/edited/escalated), this silently accumulates
+# labeled calibration data for free — whether or not the feature is ever
+# turned on.
+AUTO_SEND_ENABLED = os.getenv("AUTO_SEND_ENABLED", "false").strip().lower() == "true"
+# Circuit breaker: caps real auto-sends per rolling hour. Stateless — recomputed
+# from the DB each time via count_recent_auto_sends(), not a persisted flag.
+AUTO_SEND_MAX_PER_HOUR = int(os.getenv("AUTO_SEND_MAX_PER_HOUR", "20"))
 
 # ── Fix I: SMTP connection pool ──────────────────────────────────────────────
 # Reuse one authenticated SMTP connection across successive sends.
@@ -176,11 +194,45 @@ def mark_seen(mail: imaplib.IMAP4_SSL, mid: bytes) -> None:
     mail.store(mid, "+FLAGS", "\\Seen")
 
 
+def _circuit_breaker_tripped() -> bool:
+    """True if the auto-send rate cap has been hit in the last rolling hour."""
+    return count_recent_auto_sends(60) >= AUTO_SEND_MAX_PER_HOUR
+
+
+# Tracks whether the last check already found the breaker tripped, so the
+# Slack alert fires once on the transition (not once per email blocked while
+# it stays tripped). process_email() runs concurrently via ThreadPoolExecutor
+# (Fix F), so this needs its own lock — separate from _smtp_lock.
+_breaker_alert_lock = threading.Lock()
+_breaker_was_tripped = False
+
+
+def _check_circuit_breaker() -> bool:
+    """Like _circuit_breaker_tripped(), but also fires an edge-triggered
+    Slack alert on trip/reset. Use this at the actual send-decision point;
+    use the plain function above anywhere a side-effect-free check is fine."""
+    global _breaker_was_tripped
+    tripped = _circuit_breaker_tripped()
+    with _breaker_alert_lock:
+        if tripped and not _breaker_was_tripped:
+            _breaker_was_tripped = True
+            send_slack_alert(
+                f":red_circle: DentAgent auto-send circuit breaker tripped "
+                f"(>= {AUTO_SEND_MAX_PER_HOUR} sends in the last hour)."
+            )
+        elif not tripped and _breaker_was_tripped:
+            _breaker_was_tripped = False
+            send_slack_alert(":white_check_mark: DentAgent auto-send circuit breaker reset.")
+    return tripped
+
+
 def process_email(email_data):
     """Classify intent and generate reply draft for one email."""
     t0 = time.perf_counter()
     subject = email_data["subject"][:50]
     log.debug("Processing: '%s'", subject)
+
+    start_usage_tracking()
 
     # Combine subject + body so classifier has context even when body is short/empty
     text_for_classifier = (email_data["subject"] + "\n" + email_data["body"]).strip()
@@ -192,8 +244,9 @@ def process_email(email_data):
     intent = classification.get("intent", "OTHER")
     language = classification.get("language", "en")
     escalate = classification.get("escalate", True)
-    log.debug("classify done: intent=%s lang=%s escalate=%s (%.1fs)",
-              intent, language, escalate, classify_elapsed)
+    confidence = classification.get("confidence", 0.0)
+    log.debug("classify done: intent=%s lang=%s escalate=%s confidence=%.2f (%.1fs)",
+              intent, language, escalate, confidence, classify_elapsed)
 
     entry = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -204,6 +257,7 @@ def process_email(email_data):
         "intent": intent,
         "language": language,
         "escalate": escalate,
+        "confidence": confidence,
         "draft_reply": None,
         "sources": [],
         "retrieval_score": 0.0,
@@ -255,6 +309,54 @@ def process_email(email_data):
         )
         log.debug("escalated — ack template added (lang=%s)", language)
 
+    action = "escalated" if escalate else "pending"
+
+    # Shadow mode: always compute and persist whether this email *would*
+    # qualify, regardless of AUTO_SEND_ENABLED — see the comment on that flag.
+    would_send = meets_auto_send_criteria(
+        intent, confidence, entry["retrieval_score"], escalate, email_data["from"]
+    )
+    entry["would_auto_send"] = would_send
+
+    if AUTO_SEND_ENABLED and would_send:
+        if _check_circuit_breaker():
+            log.warning(
+                "Auto-send circuit breaker tripped (>= %d in the last hour) — "
+                "falling back to pending_review for '%s'",
+                AUTO_SEND_MAX_PER_HOUR, subject,
+            )
+        else:
+            to_address = parse_to_address(email_data["from"])
+            sent = send_reply(
+                to_address=to_address,
+                subject=email_data["subject"],
+                reply_body=entry["draft_reply"],
+                original_message_id=email_data["message_id"],
+            )
+            if sent:
+                entry["status"] = "auto_sent"
+                entry["final_reply"] = entry["draft_reply"]
+                entry["human_edited"] = False
+                entry["processed_at"] = datetime.now(timezone.utc).isoformat()
+                action = "auto_sent"
+                log.info("Auto-sent reply for '%s' (intent=%s confidence=%.2f score=%.3f)",
+                          subject, intent, confidence, entry["retrieval_score"])
+            else:
+                log.warning("Auto-send eligible but send_reply failed — "
+                            "falling back to pending_review for '%s'", subject)
+
+    usage = get_usage_totals()
+    entry["classify_elapsed"] = classify_elapsed
+    entry["rag_elapsed"] = rag_elapsed
+    entry["prompt_tokens"] = usage["prompt_tokens"]
+    entry["output_tokens"] = usage["output_tokens"]
+    entry["total_tokens"] = usage["total_tokens"]
+    entry["estimated_cost_usd"] = usage["cost_usd"]
+    entry["used_fallback"] = usage["fallback_calls"] > 0
+
+    total_elapsed = time.perf_counter() - t0
+    entry["total_elapsed"] = total_elapsed
+
     save_draft(entry)
 
     log_interaction(
@@ -263,14 +365,14 @@ def process_email(email_data):
             "intent": intent,
             "language": language,
             "escalate": escalate,
-            "confidence": classification.get("confidence", 0.0),
+            "confidence": confidence,
         },
         draft_reply=entry["draft_reply"],
         sources=entry["sources"],
-        action="escalated" if escalate else "pending",
+        final_reply=entry.get("final_reply"),
+        action=action,
     )
 
-    total_elapsed = time.perf_counter() - t0
     log.info(
         "Processed '%s' | intent=%s lang=%s escalate=%s score=%.3f | "
         "classify=%.1fs rag=%.1fs total=%.1fs",
@@ -310,6 +412,9 @@ def run_loop(interval_seconds=60, max_workers=5):
 
             log.debug("Polling inbox...")
             emails, raw_mids = fetch_unread_emails(mail)
+            health_result = update_health(imap_status="ok")
+            if health_result["just_recovered"]:
+                send_slack_alert(":white_check_mark: DentAgent IMAP recovered.")
 
             if not emails:
                 log.debug("No new emails")
@@ -368,6 +473,9 @@ def run_loop(interval_seconds=60, max_workers=5):
 
         except Exception as ex:
             log.error("Loop error — reconnecting", exc_info=True)
+            health_result = update_health(imap_status="error", error=str(ex))
+            if health_result["just_started_failing"]:
+                send_slack_alert(f":red_circle: DentAgent IMAP error: {ex}")
             try:
                 mail.logout()
             except Exception:
@@ -445,11 +553,17 @@ def send_reply(to_address: str, subject: str,
             server = _get_or_create_smtp(email_user, email_pass)
             server.sendmail(email_user, to_address, msg.as_string())
             log.info("Reply sent to %s", to_address)
+            health_result = update_health(smtp_status="ok")
+            if health_result["just_recovered"]:
+                send_slack_alert(":white_check_mark: DentAgent SMTP recovered.")
             return True
         except Exception as e:
             global _smtp_conn
             _smtp_conn = None   # force fresh connection on next attempt
             log.error("Failed to send reply to %s: %s", to_address, e, exc_info=True)
+            health_result = update_health(smtp_status="error", error=f"SMTP send failed: {e}")
+            if health_result["just_started_failing"]:
+                send_slack_alert(f":red_circle: DentAgent SMTP error: {e}")
             return False
 
 

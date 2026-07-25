@@ -11,11 +11,12 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from sentence_transformers import CrossEncoder
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception
 
-from .api_client import get_client
+from .api_client import generate_content_tracked, _is_transient
 from .system_prompt import SYSTEM_PROMPT
+from .logger import get_logger
+from .paths import PROJECT_ROOT, CHROMA_DIR
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CHROMA_DIR = PROJECT_ROOT / "chroma_db"
+log = get_logger(__name__)
 
 load_dotenv(PROJECT_ROOT / ".env")
 
@@ -113,10 +114,16 @@ def _ensure_initialized() -> None:
             return
 
         if not CHROMA_DIR.exists():
-            raise RuntimeError(
-                f"ChromaDB not found at {CHROMA_DIR}. "
-                "Run: python scripts/build_kb.py"
-            )
+            # chroma_db/ is gitignored (it's a build artifact, not source) —
+            # a fresh deploy on ephemeral storage (e.g. Streamlit Community
+            # Cloud) never has it. Build it from knowledge_base/*.txt (which
+            # IS committed) on first use instead of crashing and requiring a
+            # manual `python scripts/build_kb.py` that can't be run on a
+            # read-only-except-for-this-process cloud container anyway.
+            log.info("chroma_db not found — building it now from knowledge_base/ "
+                      "(expected on first boot of a fresh deploy)")
+            from scripts.build_kb import build_knowledge_base
+            build_knowledge_base(reset=False)
 
         _embeddings = GoogleGenerativeAIEmbeddings(
             model="models/gemini-embedding-001",
@@ -182,7 +189,7 @@ def _rewrite_query(email_body: str) -> str:
             "as one concise sentence. Output only the question, nothing else.\n\n"
             f"Email:\n{email_body[:600]}"
         )
-        response = get_client().models.generate_content(
+        response = generate_content_tracked(
             model="gemini-2.5-flash",
             contents=[{"role": "user", "parts": [{"text": prompt}]}],
         )
@@ -207,23 +214,13 @@ def _generate_hypothesis(email_body: str) -> str:
             "Output only the answer, nothing else.\n\n"
             f"Inquiry:\n{email_body[:500]}"
         )
-        response = get_client().models.generate_content(
+        response = generate_content_tracked(
             model="gemini-2.5-flash",
             contents=[{"role": "user", "parts": [{"text": prompt}]}],
         )
         return response.text.strip() or email_body
     except Exception:
         return email_body
-
-
-def _is_transient(exc: BaseException) -> bool:
-    msg = str(exc)
-    return (
-        "503" in msg or "UNAVAILABLE" in msg
-        or "429" in msg or "quota" in msg.lower()
-        or "ReadTimeout" in type(exc).__name__
-        or "Timeout" in type(exc).__name__
-    )
 
 
 def retrieve_for_email(email_body: str, intent: str = "OTHER") -> dict:
@@ -331,7 +328,7 @@ Knowledge base context (use this to answer — do not invent information):
 Client email:
 {email_body}"""
 
-    response = get_client().models.generate_content(
+    response = generate_content_tracked(
         model="gemini-2.5-flash",
         contents=[
             {"role": "user", "parts": [{"text": SYSTEM_PROMPT + "\n\n" + user_message}]}
