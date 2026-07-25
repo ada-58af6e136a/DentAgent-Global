@@ -85,6 +85,13 @@ def init_db() -> None:
             )
         """)
 
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS live_demo_runs (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT
+            )
+        """)
+
 
 def save_draft(entry: dict) -> bool:
     """
@@ -452,6 +459,32 @@ def count_recent_auto_sends(window_minutes: int = 60) -> int:
             SELECT COUNT(*) FROM drafts
              WHERE status='auto_sent'
                AND timestamp >= datetime('now', ?)
+        """, (f'-{window_minutes} minutes',)).fetchone()
+    return row[0]
+
+
+def record_live_demo_run() -> None:
+    """Log one Live Demo page click — backs count_recent_live_demo_runs()."""
+    init_db()
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO live_demo_runs (timestamp) VALUES (?)",
+            (datetime.now(timezone.utc).isoformat(),),
+        )
+
+
+def count_recent_live_demo_runs(window_minutes: int = 60) -> int:
+    """
+    Count Live Demo page runs in the last window_minutes — a global cap
+    across all visitors (not per-session), same rolling-count pattern as
+    count_recent_auto_sends(). Session-based limiting alone can be bypassed
+    by opening a new incognito window; this can't be.
+    """
+    init_db()
+    with get_conn() as conn:
+        row = conn.execute("""
+            SELECT COUNT(*) FROM live_demo_runs
+             WHERE timestamp >= datetime('now', ?)
         """, (f'-{window_minutes} minutes',)).fetchone()
     return row[0]
 
