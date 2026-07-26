@@ -15,12 +15,14 @@ Fix H: already-queued emails skipped before API calls (idempotent).
 
 import imaplib
 import email
+import re
 import signal
 import time
 import os
 import smtplib
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from html.parser import HTMLParser
 from pathlib import Path
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -49,6 +51,49 @@ IMAP_PORT = 993
 
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
+
+# ── Automated-sender pre-filter ─────────────────────────────────────────────
+# Every unread email previously got a full classify_intent() call (and, if
+# not escalated, a full RAG pipeline: query rewrite + HyDE + embedding +
+# rerank + reply generation) with zero relevance filtering first — including
+# platform notifications like Google's own "privacy settings" / "Terms of
+# Service" emails, confirmed hitting a real inbox during testing. Filtering
+# on email CONTENT (subject/body heuristics) risks the opposite failure —
+# silently dropping a real customer inquiry that happens to use the wrong
+# words — so this only matches structural sender-address signals with no
+# ambiguity: a known automated local-part prefix, or a known automated
+# domain. Anything not matched here still goes through the full pipeline.
+AUTOMATED_SENDER_PATTERNS = {
+    s.strip().lower() for s in os.getenv(
+        "AUTOMATED_SENDER_PATTERNS",
+        "noreply@,no-reply@,donotreply@,do-not-reply@,mailer-daemon@,"
+        "postmaster@,accounts.google.com"
+    ).split(",") if s.strip()
+}
+
+
+def _is_automated_sender(raw_from: str) -> bool:
+    """
+    True if the sender matches a known automated/notification pattern.
+
+    Local-part patterns (end with "@", e.g. "noreply@") match as a prefix
+    of the full address. Bare domain patterns (e.g. "accounts.google.com")
+    match the address's domain exactly or as a subdomain — never a plain
+    substring check, to avoid an unlikely-but-possible false match against
+    part of a real customer's address.
+    """
+    if not AUTOMATED_SENDER_PATTERNS:
+        return False
+    address = parse_to_address(raw_from).lower()
+    domain = address.split("@")[-1] if "@" in address else ""
+    for pattern in AUTOMATED_SENDER_PATTERNS:
+        if pattern.endswith("@"):
+            if address.startswith(pattern):
+                return True
+        elif domain == pattern or domain.endswith("." + pattern):
+            return True
+    return False
+
 
 # ── Auto-send ─────────────────────────────────────────────────────────────────
 # Off by default. When enabled, emails meeting all three thresholds in
@@ -113,27 +158,96 @@ def _decode_payload(payload: bytes, part) -> str:
         return payload.decode("utf-8", errors="replace")
 
 
+class _HTMLTextExtractor(HTMLParser):
+    """Minimal dependency-free HTML->text: collects text nodes, skips
+    script/style content, and inserts a newline at block-level tags so
+    paragraphs don't run together into one wall of text."""
+    _BLOCK_TAGS = {"p", "div", "br", "li", "tr", "h1", "h2", "h3", "h4", "h5", "h6"}
+    _SKIP_TAGS = {"script", "style"}
+
+    def __init__(self):
+        super().__init__()
+        self._parts: list[str] = []
+        self._skip_depth = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self._SKIP_TAGS:
+            self._skip_depth += 1
+        elif tag in self._BLOCK_TAGS:
+            self._parts.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in self._SKIP_TAGS and self._skip_depth > 0:
+            self._skip_depth -= 1
+
+    def handle_data(self, data):
+        if self._skip_depth == 0:
+            self._parts.append(data)
+
+    def get_text(self) -> str:
+        return "".join(self._parts)
+
+
+def _html_to_text(html: str) -> str:
+    """Crude but dependency-free HTML->text fallback for emails with no
+    text/plain part (some CRM/webform-forwarded mail sends HTML-only).
+    Not meant to be a faithful render — just to avoid the actual failure
+    mode this replaces: silently losing the entire email body and leaving
+    the classifier/RAG pipeline with only the subject line to work with.
+    """
+    parser = _HTMLTextExtractor()
+    try:
+        parser.feed(html)
+    except Exception:
+        return html  # malformed markup — pass it through raw rather than lose the content
+    text = parser.get_text()
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
 def extract_body(msg):
-    """Extract plain text body from email message."""
+    """
+    Extract plain text body from email message.
+
+    Prefers text/plain; falls back to converting text/html when no
+    text/plain part exists at all, rather than returning an empty body.
+    Previously an HTML-only email (no text/plain alternative) vanished
+    entirely — classify_intent()/generate_reply() would see only the
+    subject line, with zero visibility into the actual request.
+    """
     body = ""
+    html_body = ""
 
     if msg.is_multipart():
         for part in msg.walk():
             content_type = part.get_content_type()
             disposition = str(part.get("Content-Disposition", ""))
-            if content_type == "text/plain" and "attachment" not in disposition:
+            if "attachment" in disposition:
+                continue
+            if content_type == "text/plain" and not body:
                 payload = part.get_payload(decode=True)
                 if payload:
                     body = _decode_payload(payload, part)
-                    break
+            elif content_type == "text/html" and not html_body:
+                payload = part.get_payload(decode=True)
+                if payload:
+                    html_body = _decode_payload(payload, part)
     else:
         payload = msg.get_payload(decode=True)
         if payload:
-            body = _decode_payload(payload, msg)
+            if msg.get_content_type() == "text/html":
+                html_body = _decode_payload(payload, msg)
+            else:
+                body = _decode_payload(payload, msg)
         elif isinstance(msg.get_payload(), str):
             body = msg.get_payload()
 
-    return body.strip() if body else ""
+    if body:
+        return body.strip()
+    if html_body:
+        return _html_to_text(html_body)
+    return ""
 
 
 def _connect() -> imaplib.IMAP4_SSL:
@@ -446,7 +560,17 @@ def run_loop(interval_seconds=60, max_workers=5):
                 # Fix H: split into "already saved" vs "needs processing"
                 to_process = []
                 for e, mid in zip(emails, raw_mids):
-                    if is_already_queued(e["message_id"]):
+                    if _is_automated_sender(e["from"]):
+                        log.info(
+                            "Skipping automated/notification sender (no "
+                            "classify/RAG calls made): '%s' from %s",
+                            e["subject"][:40], e["from"][:60],
+                        )
+                        try:
+                            mark_seen(mail, mid)
+                        except Exception as ex:
+                            log.warning("mark_seen failed: %s", ex)
+                    elif is_already_queued(e["message_id"]):
                         log.warning(
                             "Duplicate re-fetch (already queued): '%s' — "
                             "skipping API calls, marking seen",
