@@ -42,12 +42,26 @@ _reranker = None
 # the updated ChromaDB — no process restart required.
 _kb_build_ts: float = 0.0
 
-_candidate_k = 10
+# was 10; raised to 16 because generic category-level queries ("what crown
+# types do you offer") share no distinctive vocabulary with any one product
+# chunk — BM25 has no rare-term anchor and gets swamped by faq.txt's larger
+# chunk count, so a genuinely relevant chunk (e.g. a category overview
+# paragraph) can fail to enter the pool at all even though the CrossEncoder
+# reranker scores it correctly once given the chance (verified via
+# scripts/debug_crown_retrieval.py). Widening the pool shifts the burden
+# from the cheap first-stage retrievers guessing right to the reranker
+# discriminating among more candidates — local model, no added API cost.
+_candidate_k = 16
 RERANK_TOP_K = 4
 RERANK_THRESHOLD = 0.0
 
 INTENT_K_MAP: dict[str, int] = {
-    "PRICING":   3,   # was 2; raised to 3 so LLM sees both available + exception chunks for nuanced policy questions
+    # was 3; raised to 4 because category overview paragraphs (2026-07) added a
+    # 4th-5th competing chunk within crown/veneer/denture pricing sections — at
+    # k=3 a category-level question ("what dentures do you offer") could lose
+    # either the overview chunk or a specific product's price to the k limit
+    # even when both were retrieved and reranked correctly.
+    "PRICING":   4,
     "MATERIAL":  3,
     "TECHNICAL": 5,
     "PROGRESS":  2,
@@ -203,14 +217,28 @@ def _generate_hypothesis(email_body: str) -> str:
     """Generate a hypothetical KB-style answer to bridge vocabulary gap.
 
     Semantic search works better when the query vector lives in the same
-    embedding space as KB chunks. A product-language hypothesis (prices,
-    materials, lead times) is closer to chunk vectors than the original email.
+    embedding space as KB chunks. A product-language hypothesis (product and
+    material names) is closer to chunk vectors than the original email.
     Falls back to the original email on failure.
+
+    Deliberately does NOT ask for prices/lead times: this call has no KB
+    context, so the model has no way to know the real figures and will
+    invent plausible-looking wrong ones from generic training knowledge
+    (caught via scripts/debug_crown_retrieval.py — a hypothesis with
+    fabricated prices for a made-up product name pulled the embedding away
+    from the real KB chunk enough that it never entered the candidate pool).
+    Terminology/topic alignment is what HyDE needs here; fabricated numbers
+    only add noise.
     """
     try:
         prompt = (
-            "Write a 2–3 sentence knowledge-base answer for this dental lab inquiry. "
-            "Use formal product terminology: product names, materials, prices, lead times. "
+            "Write a 2–3 sentence hypothetical knowledge-base-style answer for this "
+            "dental lab inquiry, using the kind of formal product and material "
+            "terminology a real answer would use (product names, material names, "
+            "restoration types). Do NOT invent specific prices, lead times, or other "
+            "numeric figures — you do not have access to our actual pricing or "
+            "scheduling data, and a wrong number would mislead the search more than "
+            "omitting it. "
             "If the inquiry asks broadly about a category (e.g. 'what dentures do you offer') "
             "rather than one specific product, briefly name each relevant product type in that "
             "category rather than answering as if only one was asked about. "
