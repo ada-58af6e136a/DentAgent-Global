@@ -31,7 +31,10 @@ from dotenv import load_dotenv
 from .classifier import classify_intent
 from .rag_chain import generate_reply
 from .analytics import log_interaction
-from .db import save_draft, is_already_queued, update_health, count_recent_auto_sends
+from .db import (
+    save_draft, is_already_queued, update_health,
+    count_recent_auto_sends, mark_as_processed,
+)
 from .api_client import start_usage_tracking, get_usage_totals
 from .alerts import send_slack_alert
 from .auto_send_rules import meets_auto_send_criteria, parse_to_address
@@ -61,6 +64,13 @@ AUTO_SEND_ENABLED = os.getenv("AUTO_SEND_ENABLED", "false").strip().lower() == "
 # Circuit breaker: caps real auto-sends per rolling hour. Stateless — recomputed
 # from the DB each time via count_recent_auto_sends(), not a persisted flag.
 AUTO_SEND_MAX_PER_HOUR = int(os.getenv("AUTO_SEND_MAX_PER_HOUR", "20"))
+# Serializes the entire check-breaker -> send -> record sequence for
+# auto-send. Without this, concurrent ThreadPoolExecutor workers can each
+# read count_recent_auto_sends() before any of them has recorded a send,
+# letting the batch overshoot AUTO_SEND_MAX_PER_HOUR by up to (workers-1).
+# Trading a little throughput for correctness is the right call for an
+# irreversible action sent to a real customer.
+_auto_send_lock = threading.Lock()
 
 # ── Fix I: SMTP connection pool ──────────────────────────────────────────────
 # Reuse one authenticated SMTP connection across successive sends.
@@ -318,33 +328,6 @@ def process_email(email_data):
     )
     entry["would_auto_send"] = would_send
 
-    if AUTO_SEND_ENABLED and would_send:
-        if _check_circuit_breaker():
-            log.warning(
-                "Auto-send circuit breaker tripped (>= %d in the last hour) — "
-                "falling back to pending_review for '%s'",
-                AUTO_SEND_MAX_PER_HOUR, subject,
-            )
-        else:
-            to_address = parse_to_address(email_data["from"])
-            sent = send_reply(
-                to_address=to_address,
-                subject=email_data["subject"],
-                reply_body=entry["draft_reply"],
-                original_message_id=email_data["message_id"],
-            )
-            if sent:
-                entry["status"] = "auto_sent"
-                entry["final_reply"] = entry["draft_reply"]
-                entry["human_edited"] = False
-                entry["processed_at"] = datetime.now(timezone.utc).isoformat()
-                action = "auto_sent"
-                log.info("Auto-sent reply for '%s' (intent=%s confidence=%.2f score=%.3f)",
-                          subject, intent, confidence, entry["retrieval_score"])
-            else:
-                log.warning("Auto-send eligible but send_reply failed — "
-                            "falling back to pending_review for '%s'", subject)
-
     usage = get_usage_totals()
     entry["classify_elapsed"] = classify_elapsed
     entry["rag_elapsed"] = rag_elapsed
@@ -353,11 +336,50 @@ def process_email(email_data):
     entry["total_tokens"] = usage["total_tokens"]
     entry["estimated_cost_usd"] = usage["cost_usd"]
     entry["used_fallback"] = usage["fallback_calls"] > 0
+    # Measured up to this point, not through the SMTP round-trip below for
+    # auto-sent mail — a few hundred ms of latency-metric imprecision is a
+    # fully acceptable trade for the ordering fix directly below.
+    entry["total_elapsed"] = time.perf_counter() - t0
 
-    total_elapsed = time.perf_counter() - t0
-    entry["total_elapsed"] = total_elapsed
-
+    # Fix (2026-07): establish idempotency BEFORE any irreversible action.
+    # Previously send_reply() ran before this save; a crash or DB error
+    # between a successful send and the write left is_already_queued()
+    # returning False, so the next poll cycle would re-fetch and genuinely
+    # re-send the same email. Saving now (status=pending_review) means any
+    # failure past this point leaves an ordinary pending-review draft
+    # behind — is_already_queued() already returns True on the next cycle
+    # either way, so reprocessing (and re-sending) can no longer happen.
     save_draft(entry)
+
+    if AUTO_SEND_ENABLED and would_send:
+        with _auto_send_lock:
+            if _check_circuit_breaker():
+                log.warning(
+                    "Auto-send circuit breaker tripped (>= %d in the last hour) — "
+                    "leaving '%s' in pending_review",
+                    AUTO_SEND_MAX_PER_HOUR, subject,
+                )
+            else:
+                to_address = parse_to_address(email_data["from"])
+                sent = send_reply(
+                    to_address=to_address,
+                    subject=email_data["subject"],
+                    reply_body=entry["draft_reply"],
+                    original_message_id=email_data["message_id"],
+                )
+                if sent:
+                    updated = mark_as_processed(
+                        email_data["message_id"], "auto_sent",
+                        entry["draft_reply"], False,
+                    )
+                    if updated:
+                        entry.update(updated)
+                    action = "auto_sent"
+                    log.info("Auto-sent reply for '%s' (intent=%s confidence=%.2f score=%.3f)",
+                              subject, intent, confidence, entry["retrieval_score"])
+                else:
+                    log.warning("Auto-send eligible but send_reply failed — "
+                                "leaving '%s' in pending_review", subject)
 
     log_interaction(
         email_data=email_data,
@@ -377,7 +399,7 @@ def process_email(email_data):
         "Processed '%s' | intent=%s lang=%s escalate=%s score=%.3f | "
         "classify=%.1fs rag=%.1fs total=%.1fs",
         subject, intent, language, escalate,
-        entry["retrieval_score"], classify_elapsed, rag_elapsed, total_elapsed,
+        entry["retrieval_score"], classify_elapsed, rag_elapsed, entry["total_elapsed"],
     )
 
     return entry
