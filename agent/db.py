@@ -12,6 +12,7 @@ INSERT OR IGNORE on message_id gives idempotent writes.
 import json
 import math
 import sqlite3
+import threading
 from datetime import datetime, timezone
 
 from .paths import DATA_DIR
@@ -42,7 +43,33 @@ _DRAFTS_MIGRATION_COLUMNS = {
 }
 
 
+_init_lock = threading.Lock()
+_initialized = False
+
+
 def init_db() -> None:
+    """
+    Create/migrate the schema — but only actually do the work once per
+    process. Every db.py function calls this first, so without the guard
+    below every single query (including ones on the hot path under
+    concurrent ThreadPoolExecutor workers) re-ran PRAGMA table_info and
+    re-checked every migration column. Double-checked locking (same pattern
+    as agent/rag_chain.py's _ensure_initialized()) also closes a latent
+    race: two threads both reaching the ALTER TABLE ADD COLUMN loop before
+    either finished could both attempt to add the same column and one
+    would fail with "duplicate column name".
+    """
+    global _initialized
+    if _initialized:
+        return
+    with _init_lock:
+        if _initialized:
+            return
+        _init_db_impl()
+        _initialized = True
+
+
+def _init_db_impl() -> None:
     with get_conn() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS drafts (
