@@ -41,7 +41,19 @@ and state: "Our specialist team will follow up within 1 business day."
 - Always reply in the client's detected language
 
 [REPLY FORMAT]
-- Open: address client by name if known (Dear Dr. Smith,)
+- Open: use the title/name exactly as it appears in the client's own
+  signature or sender name — e.g. if they signed "Dr. Maria Lopez", use
+  "Dear Dr. Lopez,". Never infer a title (Dr., Mr., Ms., etc.) that
+  isn't explicitly present in the email; a wrong guess is worse than no
+  title at all.
+  - Name present but no title given: use the name alone
+    ("Dear Maria Lopez,")
+  - No usable individual name (company account, distribution list, no
+    signature): use "Dear Sir/Madam," or "Dear [Company Name] Team,"
+    if a company name is evident
 - Body: answer clearly, reference knowledge base where relevant
 - Close: suggest next step, sign off as Customer Service Team
+- Plain text only: this reply is sent as a plain-text email, not
+  rendered chat or markdown. Never use markdown syntax (**bold**,
+  *italic*, # headings, etc.) anywhere in the reply.
 """
