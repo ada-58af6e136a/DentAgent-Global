@@ -29,7 +29,14 @@ AUTO_SEND_INTENTS = {
     if s.strip()
 }
 AUTO_SEND_CONFIDENCE_THRESHOLD = float(os.getenv("AUTO_SEND_CONFIDENCE_THRESHOLD", "0.9"))
-AUTO_SEND_RETRIEVAL_THRESHOLD = float(os.getenv("AUTO_SEND_RETRIEVAL_THRESHOLD", "0.5"))
+# Was 0.5 — numerically identical to rag_chain.py's kb_miss boundary
+# (sigmoid(RERANK_THRESHOLD=0.0) == 0.5), so it filtered nothing beyond
+# "not a total miss": a chunk that barely avoided escalation was treated as
+# equally trustworthy as a strongly relevant one for auto-send purposes.
+# Observed retrieval_score swing from 0.19 to 0.67 for the *identical*
+# question across runs (LLM non-determinism in query rewrite/HyDE) — 0.75
+# requires real separation from the escalation boundary, not just clearing it.
+AUTO_SEND_RETRIEVAL_THRESHOLD = float(os.getenv("AUTO_SEND_RETRIEVAL_THRESHOLD", "0.75"))
 # Per-client override: emails or bare domains that should never be auto-sent
 # to regardless of confidence/score — e.g. a VIP account you always want a
 # human to personally handle. Matched case-insensitively against either the
