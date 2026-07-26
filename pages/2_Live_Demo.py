@@ -109,7 +109,10 @@ if run and email_input.strip():
 
             language = classification.get("language", "en")
             intent = classification.get("intent", "OTHER")
-            escalate = classification.get("escalate", False)
+            # Fail safe like the production handler (agent/email_handler.py) —
+            # a missing/malformed field should default to escalating, not to
+            # generating and displaying a reply it shouldn't have.
+            escalate = classification.get("escalate", True)
             confidence = classification.get("confidence", 0.0)
             reason = classification.get("reason", "")
 
