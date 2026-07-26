@@ -1,5 +1,6 @@
 import math
 import os
+import re
 import threading
 from pathlib import Path
 
@@ -296,6 +297,32 @@ def retrieve_for_email(email_body: str, intent: str = "OTHER") -> dict:
     }
 
 
+# ── Markdown safety net ──────────────────────────────────────────────────────
+# Replies are sent as MIMEText "plain" (agent/email_handler.py:send_reply) —
+# not rendered, so markdown syntax the LLM emits shows up as literal
+# characters in the customer's inbox. SYSTEM_PROMPT now says not to use
+# markdown, but prompt instructions aren't 100% reliable on their own (see
+# today's HyDE fix, where "don't invent prices" alone didn't stop the model
+# from inventing a brand name instead) — this is a code-side backstop, not a
+# replacement for the prompt instruction.
+# Underscore variants need \b guards — _ counts as a word character in regex,
+# so without them "Price_per_unit" would be mangled into "Priceperunit"
+# (matched as italic) instead of left alone.
+_MD_BOLD_ITALIC = re.compile(
+    r"\*\*(.+?)\*\*|\*(.+?)\*|\b__(.+?)__\b|\b_(.+?)_\b"
+)
+_MD_HEADING = re.compile(r"^#{1,6}[ \t]+", re.MULTILINE)
+
+
+def _strip_markdown(text: str) -> str:
+    """Strip common markdown artifacts (bold/italic/headings) from LLM output."""
+    if not text:
+        return text
+    text = _MD_BOLD_ITALIC.sub(lambda m: next(g for g in m.groups() if g is not None), text)
+    text = _MD_HEADING.sub("", text)
+    return text
+
+
 @retry(
     retry=retry_if_exception(_is_transient),
     wait=wait_exponential(multiplier=2, min=4, max=60),
@@ -339,7 +366,7 @@ Client email:
     )
 
     return {
-        "reply": response.text.strip(),
+        "reply": _strip_markdown(response.text.strip()),
         "sources": retrieval["sources"],
         "retrieval_score": retrieval["retrieval_score"],
         "kb_miss": False,
