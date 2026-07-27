@@ -36,28 +36,49 @@ def detect_language(text: str) -> str:
 )
 def classify_intent(email_body: str) -> dict:
     """
-    Returns {intent, language, escalate, confidence, reason}.
+    Returns {intent, language, escalate, confidence, reason,
+    rewritten_query, hypothesis}.
     escalate is True for REWORK, BILLING, complaints, legal threats,
     manager requests, or anything outside the knowledge base.
+
+    rewritten_query/hypothesis piggyback on this same call so that
+    rag_chain.retrieve_for_email() doesn't need its own query-rewrite and
+    HyDE LLM calls for the common case — one call in, three things out,
+    instead of three separate calls each re-reading the same email. Callers
+    that don't have a classify_intent() result (e.g. standalone retrieval
+    validation scripts) still get those via rag_chain's own fallback.
     """
     language = detect_language(email_body)
 
-    prompt = f"""Classify this dental clinic email into exactly one category.
-Categories: {', '.join(INTENT_CATEGORIES)}
+    prompt = f"""Analyze this dental clinic email and return one JSON object
+covering three tasks:
 
-ESCALATE = true for: REWORK, BILLING (disputes), OTHER,
-or any email containing complaint / legal threat /
-patient adverse event / manager request / custom pricing negotiation.
+1. Classify into exactly one category: {', '.join(INTENT_CATEGORIES)}.
+   ESCALATE = true for: REWORK, BILLING (disputes), OTHER,
+   or any email containing complaint / legal threat /
+   patient adverse event / manager request / custom pricing negotiation.
+2. Extract the single core question or request as one concise sentence,
+   stripped of greeting/signature noise (used for keyword search).
+3. Write a 2-3 sentence hypothetical knowledge-base-style answer using
+   formal product terminology (product names, materials, prices, lead
+   times) — it does not need to be factually correct, it only needs to
+   sit close to real KB chunks in embedding space for semantic search. If
+   the inquiry asks broadly about a category (e.g. "what dentures do you
+   offer") rather than one specific product, briefly name each relevant
+   product type in that category rather than answering as if only one was
+   asked about.
 
-Return JSON only, no other text:
-{{"intent": "CATEGORY", "escalate": true/false, "confidence": 0.0-1.0, "reason": "one sentence"}}
+Return JSON only, no other text, matching this shape exactly:
+{{"intent": "CATEGORY", "escalate": true/false, "confidence": 0.0-1.0, "reason": "one sentence", "rewritten_query": "...", "hypothesis": "..."}}
 
 Email:
-{email_body[:800]}"""
+{email_body[:1000]}"""
 
     response = generate_content_tracked(
         model="gemini-2.5-flash",
         contents=prompt,
+        json_mode=True,
+        max_output_tokens=500,  # safety cap: JSON reason + rewritten_query + hypothesis
     )
 
     raw = response.text.strip()

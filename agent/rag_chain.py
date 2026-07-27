@@ -205,6 +205,7 @@ def _rewrite_query(email_body: str) -> str:
         response = generate_content_tracked(
             model="gemini-2.5-flash",
             contents=[{"role": "user", "parts": [{"text": prompt}]}],
+            max_output_tokens=100,  # one sentence
         )
         return response.text.strip() or email_body
     except Exception:
@@ -233,14 +234,17 @@ def _generate_hypothesis(email_body: str) -> str:
         response = generate_content_tracked(
             model="gemini-2.5-flash",
             contents=[{"role": "user", "parts": [{"text": prompt}]}],
+            max_output_tokens=250,  # 2-3 sentences
         )
         return response.text.strip() or email_body
     except Exception:
         return email_body
 
 
-def retrieve_for_email(email_body: str, intent: str = "OTHER") -> dict:
-    """Full retrieval pipeline — no LLM generation.
+def retrieve_for_email(email_body: str, intent: str = "OTHER",
+                        rewritten_query: str | None = None,
+                        hypothesis: str | None = None) -> dict:
+    """Full retrieval pipeline.
 
     Stages:
       2.1  Query rewriting    → clean keyword query for BM25 + CrossEncoder
@@ -249,6 +253,13 @@ def retrieve_for_email(email_body: str, intent: str = "OTHER") -> dict:
       3.4  MMR diversity      → already applied on the semantic side
       4.1  CrossEncoder rerank→ precision re-score on (rewritten_query, chunk)
       3.3  Dynamic k          → intent-specific final chunk count
+
+    rewritten_query/hypothesis are normally supplied by classify_intent()
+    (it produces them as part of its single classification call — see
+    agent/classifier.py). Passing None here — the case for callers with no
+    classify_intent() result, e.g. standalone retrieval validation scripts —
+    falls back to this module's own LLM calls so behavior is unchanged for
+    them; it only costs the extra calls when nothing better was provided.
 
     Returns:
         {
@@ -263,9 +274,9 @@ def retrieve_for_email(email_body: str, intent: str = "OTHER") -> dict:
     _ensure_initialized()
 
     # 2.1 clean query for keyword matching and reranking
-    rewritten = _rewrite_query(email_body)
+    rewritten = rewritten_query or _rewrite_query(email_body)
     # 2.2 KB-style hypothesis for dense semantic search
-    hypothesis = _generate_hypothesis(email_body)
+    hypothesis = hypothesis or _generate_hypothesis(email_body)
 
     # Stage 1: hybrid retrieval (3.1 + 3.4)
     bm25_results = _bm25_retriever.invoke(rewritten)
@@ -295,9 +306,16 @@ def retrieve_for_email(email_body: str, intent: str = "OTHER") -> dict:
             "kb_miss": True, "rewritten_query": rewritten,
         }
 
-    # 3.3 intent-aware final chunk count
+    # 3.3 intent-aware final chunk count, with a per-chunk relevance floor —
+    # top_k is a ceiling, not a quota. Previously every slot up to top_k got
+    # filled regardless of individual score, so a weakly-related chunk could
+    # ride along just because there was room for it, padding context tokens
+    # without adding signal (and risking the model citing it). Reuses
+    # RERANK_THRESHOLD — the same bar the top-1 chunk already had to clear
+    # above to avoid kb_miss — so a companion chunk that wouldn't itself have
+    # passed as a top-1 match doesn't get a pass just for being in the top_k.
     top_k = INTENT_K_MAP.get(intent, RERANK_TOP_K)
-    final_docs = [doc for doc, _ in ranked[:top_k]]
+    final_docs = [doc for doc, score in ranked[:top_k] if float(score) >= RERANK_THRESHOLD]
     sources = [Path(doc.metadata.get("source", "unknown")).name for doc in final_docs]
 
     return {
@@ -341,8 +359,15 @@ def _strip_markdown(text: str) -> str:
     stop=stop_after_attempt(4),
     reraise=True,
 )
-def generate_reply(email_body: str, language: str, intent: str = "OTHER") -> dict:
+def generate_reply(email_body: str, language: str, intent: str = "OTHER",
+                    rewritten_query: str | None = None,
+                    hypothesis: str | None = None) -> dict:
     """Run retrieval then generate a reply with the top-k reranked chunks.
+
+    rewritten_query/hypothesis are forwarded to retrieve_for_email() — see
+    its docstring. Passing them (as email_handler.py and the Live Demo page
+    do, from classify_intent()'s output) skips retrieve_for_email()'s own
+    query-rewrite/HyDE LLM calls entirely.
 
     Returns:
         {
@@ -352,7 +377,7 @@ def generate_reply(email_body: str, language: str, intent: str = "OTHER") -> dic
             "kb_miss":          bool,
         }
     """
-    retrieval = retrieve_for_email(email_body, intent)
+    retrieval = retrieve_for_email(email_body, intent, rewritten_query, hypothesis)
 
     if retrieval["kb_miss"]:
         return {
@@ -375,6 +400,7 @@ Client email:
         contents=[
             {"role": "user", "parts": [{"text": SYSTEM_PROMPT + "\n\n" + user_message}]}
         ],
+        max_output_tokens=1000,  # safety cap on an already-concise reply
     )
 
     return {

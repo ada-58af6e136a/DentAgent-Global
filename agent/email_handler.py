@@ -391,7 +391,11 @@ def process_email(email_data):
     rag_elapsed = 0.0
     if not escalate:
         t_rag = time.perf_counter()
-        result = generate_reply(email_data["body"], language, intent)
+        result = generate_reply(
+            email_data["body"], language, intent,
+            rewritten_query=classification.get("rewritten_query"),
+            hypothesis=classification.get("hypothesis"),
+        )
         rag_elapsed = time.perf_counter() - t_rag
         entry["retrieval_score"] = result.get("retrieval_score", 0.0)
 

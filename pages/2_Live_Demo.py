@@ -126,7 +126,11 @@ if run and email_input.strip():
                            "not an auto-generated reply.")
             else:
                 with st.spinner("Retrieving from knowledge base and generating reply..."):
-                    result = generate_reply(email_input, language, intent)
+                    result = generate_reply(
+                        email_input, language, intent,
+                        rewritten_query=classification.get("rewritten_query"),
+                        hypothesis=classification.get("hypothesis"),
+                    )
                 retrieval_score = result.get("retrieval_score", 0.0)
 
                 if result.get("kb_miss"):
