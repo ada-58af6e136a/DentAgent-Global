@@ -1,5 +1,4 @@
 import math
-import os
 import re
 import threading
 from pathlib import Path
@@ -8,11 +7,11 @@ from dotenv import load_dotenv
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_community.retrievers import BM25Retriever
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from sentence_transformers import CrossEncoder
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception
 
 from .api_client import generate_content_tracked, _is_transient
+from .embeddings import get_embeddings, EMBEDDING_MODEL_NAME
 from .system_prompt import SYSTEM_PROMPT
 from .logger import get_logger
 from .paths import PROJECT_ROOT, CHROMA_DIR
@@ -125,11 +124,24 @@ def _ensure_initialized() -> None:
                       "(expected on first boot of a fresh deploy)")
             from scripts.build_kb import build_knowledge_base
             build_knowledge_base(reset=False)
+        else:
+            # An existing chroma_db may have been built with a different
+            # embedding model (e.g. a persistent volume from before the
+            # switch away from Gemini embeddings) — a missing marker file
+            # means the same thing, since it predates this check. Its
+            # vectors live in a different space/dimensionality than the
+            # current model produces, so loading it as-is would silently
+            # return meaningless similarity scores rather than a clean
+            # error. Rebuild from scratch instead.
+            marker = CHROMA_DIR / ".embedding_model"
+            built_with = marker.read_text().strip() if marker.exists() else None
+            if built_with != EMBEDDING_MODEL_NAME:
+                log.warning("chroma_db embedding model mismatch (built_with=%r, "
+                            "current=%r) — rebuilding", built_with, EMBEDDING_MODEL_NAME)
+                from scripts.build_kb import build_knowledge_base
+                build_knowledge_base(reset=True)
 
-        _embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/gemini-embedding-001",
-            google_api_key=os.getenv("GEMINI_API_KEY"),
-        )
+        _embeddings = get_embeddings()
 
         _db = Chroma(
             persist_directory=str(CHROMA_DIR),

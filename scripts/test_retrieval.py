@@ -12,16 +12,16 @@ It does not call an LLM and does not generate replies.
 It is used to debug whether the correct knowledge base chunks are retrieved.
 """
 
+import sys
 from pathlib import Path
-import os
 
-from dotenv import load_dotenv
 from langchain_chroma import Chroma
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CHROMA_DIR = PROJECT_ROOT / "chroma_db"
+
+sys.path.insert(0, str(PROJECT_ROOT))
+from agent.embeddings import get_embeddings  # noqa: E402
 
 
 def get_embedding_function():
@@ -29,22 +29,10 @@ def get_embedding_function():
     Create the same embedding function used when building the ChromaDB.
 
     Important:
-    The embedding model here must match the model used in build_kb.py.
+    The embedding model here must match the model used in build_kb.py —
+    both now come from agent/embeddings.py so they can't drift apart.
     """
-
-    load_dotenv(PROJECT_ROOT / ".env")
-
-    gemini_api_key = os.getenv("GEMINI_API_KEY")
-    if not gemini_api_key:
-        raise RuntimeError(
-            "GEMINI_API_KEY was not found. "
-            "Add it to your local .env file before running retrieval tests."
-        )
-
-    return GoogleGenerativeAIEmbeddings(
-        model="models/gemini-embedding-001",
-        google_api_key=gemini_api_key,
-    )
+    return get_embeddings()
 
 
 def load_vector_database():
