@@ -1,6 +1,6 @@
 # DentAgent-Global
 
-A multilingual AI customer service agent for international dental prosthetics manufacturing. Handles email inquiries from clinics across six countries by classifying intent, querying a knowledge base, drafting professional replies in the client's language, and sending approved replies via Gmail.
+A multilingual AI customer service agent for international dental prosthetics manufacturing. Handles email inquiries from clinics across seven countries by classifying intent, querying a knowledge base, drafting professional replies in the client's language, and sending approved replies via Gmail.
 
 ---
 
@@ -20,56 +20,77 @@ A multilingual AI customer service agent for international dental prosthetics ma
 
 ```
 DentAgent-Global/
-├── agent/                   # Core pipeline package
+├── agent/                    # Core pipeline package
 │   ├── __init__.py
-│   ├── classifier.py        # Language detection + intent classification
-│   ├── email_handler.py     # IMAP polling, body decoding, SMTP sending
-│   ├── rag_chain.py         # ChromaDB retrieval + reply generation
-│   ├── system_prompt.py     # Agent rulebook (SYSTEM_PROMPT constant)
-│   └── analytics.py         # Interaction logging and accuracy reporting
+│   ├── classifier.py         # Language detection + intent classification
+│   │                         #   (single call: intent/escalate + query rewrite + HyDE)
+│   ├── email_handler.py      # IMAP polling, body decoding, SMTP sending, auto-send
+│   ├── rag_chain.py          # ChromaDB retrieval + reply generation
+│   ├── embeddings.py         # Local multilingual embedding model (build + query time)
+│   ├── api_client.py         # DeepSeek/Gemini client, failover, usage/cost tracking
+│   ├── auto_send_rules.py    # Auto-send eligibility scoring (shared by real + shadow mode)
+│   ├── system_prompt.py      # Agent rulebook (SYSTEM_PROMPT constant)
+│   ├── db.py                 # SQLite persistence (drafts, health, calibration queries)
+│   ├── analytics.py          # Interaction logging and accuracy reporting
+│   ├── alerts.py             # Slack alerting for IMAP/SMTP outages, circuit breaker trips
+│   ├── logger.py             # Shared logging config
+│   └── paths.py              # DATA_DIR/CHROMA_DIR, Railway persistent-volume aware
 │
-├── knowledge_base/          # Plain-text source documents for RAG
+├── knowledge_base/           # Plain-text source documents for RAG
 │   ├── pricing.txt
 │   ├── materials.txt
 │   ├── order_process.txt
 │   ├── faq.txt
 │   └── tech_selection.md
 │
-├── scripts/                 # Utility scripts
-│   ├── document_loader.py   # Load and chunk knowledge base files
-│   ├── build_kb.py          # Build ChromaDB vector database
-│   ├── test_retrieval.py    # Debug retrieval without LLM
-│   ├── run_validation.py    # Run 28-question validation suite
+├── scripts/                  # Utility scripts
+│   ├── document_loader.py    # Load and chunk knowledge base files
+│   ├── build_kb.py           # Build ChromaDB vector database (local embeddings)
+│   ├── test_retrieval.py     # Debug retrieval without LLM
+│   ├── test_reply_quality.py # Real-LLM checks for greeting rule + markdown safety net
+│   ├── run_validation.py     # 28-question validation, V0/V1 baseline pipeline
+│   ├── run_validation_v2.py  # 28-question validation, BM25+MMR+rerank pipeline
+│   ├── run_validation_v3.py  # 28-question validation, +query rewrite/HyDE/dynamic-k
+│   ├── run_validation_42q.py # Extended 42-question validation suite
+│   ├── migrate_to_sqlite.py  # One-time migration from the old *.jsonl queues to drafts.db
 │   ├── archive_old_drafts.py # Move old terminal-state drafts to drafts_archive
-│   └── seed_demo_data.py    # Populate data/drafts.db with synthetic demo drafts
+│   └── seed_demo_data.py     # Populate data/drafts.db with synthetic demo drafts
 │
-├── pages/                   # Streamlit multipage app (alongside app.py)
-│   ├── 1_📊_Ops_Dashboard.py # Volume, latency, cost, health, auto-send audit
-│   └── 2_🧪_Live_Demo.py     # Real pipeline run on visitor-pasted email text
+├── pages/                    # Streamlit multipage app (alongside app.py)
+│   ├── 1_Ops_Dashboard.py    # Volume, latency, cost, cache hit rate, health, auto-send audit
+│   └── 2_Live_Demo.py        # Real pipeline run on visitor-pasted email text
 │
-├── tests/                   # Test scripts
-│   ├── test_imap.py         # Verify Gmail IMAP connection
-│   ├── test_gemini.py       # Verify Gemini API connection
-│   ├── test_api.py          # Verify Anthropic/OpenAI API connections
-│   └── test_emails/         # Sample client emails
+├── tests/                    # Test scripts
+│   ├── test_imap.py          # Verify Gmail IMAP connection
+│   ├── test_gemini.py        # Verify Gemini API connection
+│   ├── test_api.py           # Verify Anthropic/OpenAI API connections
+│   └── test_emails/          # Sample client emails
 │
-├── docs/                    # Project documentation
-│   ├── scenario_map.md      # CS scenario types and escalation rules
+├── docs/                     # Project documentation
+│   ├── scenario_map.md       # CS scenario types and escalation rules
 │   └── email_system_audit.md
 │
-├── validation/              # Validation results
+├── validation/                # Validation results (28Q V0-V3, 42Q)
 │   ├── Validation_Results_V0_28Q.csv
-│   └── Validation_Results_V1_28Q.csv
+│   ├── Validation_Results_V1_28Q.csv
+│   ├── Validation_Results_V2_28Q.csv
+│   ├── Validation_Results_V3_28Q.csv
+│   └── Validation_Results_V3_42Q.csv
 │
-├── data/                    # Runtime data — gitignored, never commit
-│   ├── draft_queue.jsonl    # Pending drafts awaiting human review
-│   ├── processed_queue.jsonl
-│   └── interaction_log.jsonl
+├── data/                      # Runtime data — gitignored, never commit
+│   ├── drafts.db              # SQLite — the real store (drafts, health, live-demo runs)
+│   ├── interaction_log.jsonl  # Append-only log consumed by agent/analytics.py
+│   ├── agent.log*             # Rotated application logs
+│   └── draft_queue.jsonl, processed_queue.jsonl  # pre-SQLite legacy queue files,
+│                                                  # kept only for scripts/migrate_to_sqlite.py
 │
-├── chroma_db/               # ChromaDB vector store (generated, gitignored)
-├── app.py                   # Streamlit review dashboard
-├── run_handler.py           # Entry point for email polling loop
-├── .env.example             # API key template
+├── chroma_db/                # ChromaDB vector store (generated, gitignored)
+├── app.py                    # Streamlit review dashboard
+├── run_handler.py            # Entry point for email polling loop
+├── generate_report.py        # Generates DentAgent_V1_Optimization_Report.docx
+├── start.sh                  # Railway start command — backgrounds run_handler.py, runs streamlit
+├── railway.json               # Railway deploy config (points at start.sh)
+├── .env.example               # API key template
 └── requirements.txt
 ```
 
@@ -94,8 +115,9 @@ pip install -r requirements.txt
 cp .env.example .env
 # Edit .env and fill in:
 #   DEEPSEEK_API_KEY — primary text-generation provider, get one at platform.deepseek.com
-#   GEMINI_API_KEY   — required too (retrieval embeddings + text-generation fallback)
-#                      get one free at aistudio.google.com
+#   GEMINI_API_KEY   — recommended (text-generation fallback on a DeepSeek outage)
+#                      get one free at aistudio.google.com. Retrieval embeddings
+#                      run on a local model, so this isn't required for retrieval.
 #   GMAIL_EMAIL      — the Gmail account used to send/receive
 #   GMAIL_PASSWORD   — Gmail App Password (not your login password)
 #                      Generate at: myaccount.google.com/apppasswords
@@ -111,7 +133,8 @@ python scripts/build_kb.py
 ## Running
 
 ### Email polling loop
-Polls the Gmail inbox every 60 seconds, classifies each email, and saves a draft reply to `data/draft_queue.jsonl`.
+Polls the Gmail inbox every 15 seconds by default (`POLL_INTERVAL_SECONDS`),
+classifies each email, and saves a draft reply to `data/drafts.db` (SQLite).
 
 ```bash
 python run_handler.py
@@ -152,13 +175,16 @@ Incoming email (IMAP)
   ├── extract_body()    — charset-aware body decoding for CJK emails
   └── process_email()
         │
-        ├── classifier.py → intent + language + escalate flag
-        │   ├── CJK fast-path for Chinese detection
-        │   └── Gemini 2.5 Flash for intent classification
+        ├── classifier.py → one call (DeepSeek primary, Gemini fallback)
+        │   │               returns intent + escalate flag + rewritten_query
+        │   │               (BM25) + hypothesis (HyDE) together
+        │   └── CJK fast-path for Chinese detection (langdetect elsewhere)
         │
         └── rag_chain.py (if not escalated)
-            ├── ChromaDB retrieval (top-4 chunks, multilingual embeddings)
-            └── Gemini 2.5 Flash reply generation in client's language
+            ├── ChromaDB retrieval (intent-sized top-k, per-chunk relevance
+            │   floor, local multilingual embeddings — no query rewrite/HyDE
+            │   call here, classifier.py already produced both)
+            └── DeepSeek reply generation in client's language
                 │
                 ▼
      eligible for auto-send? (see "Auto-send" below)
@@ -224,10 +250,17 @@ string matching, so connection-level failures are caught precisely, not just
 non-transient error (bad request, auth) raises immediately without failover,
 since rerouting won't fix a config bug.
 
-Gemini can't be removed from this project even though it's now the fallback
-for text generation — `agent/rag_chain.py`'s retrieval step depends on
-Gemini's embeddings API (`models/gemini-embedding-001`), which DeepSeek has
-no equivalent for. Both `DEEPSEEK_API_KEY` and `GEMINI_API_KEY` are required.
+Retrieval embeddings run on a local multilingual model
+(`agent/embeddings.py`, `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`)
+rather than Gemini's embeddings API — no network round-trip per email, and
+`GEMINI_API_KEY` is only needed for the text-generation failover above, not
+for retrieval. `DEEPSEEK_API_KEY` is required; `GEMINI_API_KEY` is recommended.
+`rag_chain.py` stamps a `.embedding_model` marker file into `chroma_db/` at
+build time and checks it on init, so an existing deployment's persistent
+volume (e.g. Railway — see below) with a `chroma_db/` built under the old
+Gemini embeddings gets auto-rebuilt with the local model on next boot
+instead of silently loading vectors in the wrong space. Expect one slower
+first request after deploying an embedding-model change.
 
 Per-email token cost is tracked using whichever provider actually served
 each call, and `data/drafts.db.used_fallback` records which emails needed
@@ -240,6 +273,19 @@ two rates depending on cache hit/miss — the response reports the real split
 `agent/api_client.py:_estimate_deepseek_cost_usd()` uses the actual split
 rather than assuming every token is the more expensive cache-miss rate.
 Falls back to all-cache-miss only if a response is ever missing that field.
+The hit/miss split is tracked per email and rolled up as a "prompt cache hit
+rate" KPI and trend chart on the Ops Dashboard, since SYSTEM_PROMPT and the
+classify instructions are fixed prefixes sent on every call — a low rate
+with real traffic flowing is worth investigating, not just background noise.
+
+Since classification, query rewriting, and HyDE hypothesis generation are
+one merged call (`classifier.py:classify_intent()` — see "How It Works"
+above), a typical non-escalated email costs exactly 2 LLM calls, not 4: the
+merged classify call and the final reply generation call. All four
+generation calls (classify, the rewrite/HyDE fallbacks retrieval falls back
+to when a caller has no classify_intent() result, and reply generation) also
+carry a `max_output_tokens` cap — a cost/runaway-output safety net, not a
+target; normal output sits well under it.
 
 ### Alerting
 
@@ -282,7 +328,7 @@ Two pages, two different jobs:
   `data/` is gitignored, so `app.py` self-seeds the synthetic data
   automatically the first time it boots against an empty table — nothing to
   run by hand for a deploy.
-- **Live Demo (`pages/2_🧪_Live_Demo.py`)** — paste any email, get a real
+- **Live Demo (`pages/2_Live_Demo.py`)** — paste any email, get a real
   `classify_intent()` + `generate_reply()` run against the actual pipeline
   (DeepSeek primary, Gemini fallback, real `chroma_db` retrieval). This is
   what actually demonstrates translation/generation quality, not just the UI.
@@ -303,10 +349,9 @@ actually demonstrating the product instead of a static mockup of it.
 1. Push this repo to GitHub (already set up: `ada-58af6e136a/DentAgent-Global`)
 2. On share.streamlit.io: **New app** → pick this repo/branch
 3. Main file path: `app.py`
-4. Advanced settings → **Secrets**: add `DEMO_MODE = "true"`,
-   `DEEPSEEK_API_KEY`, and `GEMINI_API_KEY` (both required — see "LLM
-   failover" above for why Gemini can't be dropped even though DeepSeek is
-   primary)
+4. Advanced settings → **Secrets**: add `DEMO_MODE = "true"`, `DEEPSEEK_API_KEY`
+   (required), and `GEMINI_API_KEY` (recommended — see "LLM failover" above;
+   without it a DeepSeek outage has nothing to fail over to)
 5. Deploy
 
 ### Stage 2: the real backend (private — do not share this link)
@@ -343,7 +388,8 @@ volume's mount path and everything that needs to persist lands together.
 2. Add a **Volume** to the service (Settings → Volumes), note its mount path
 3. Environment variables (Settings → Variables):
    - `PERSISTENT_DATA_DIR` = the volume's mount path from step 2
-   - `DEEPSEEK_API_KEY`, `GEMINI_API_KEY` — both required, see "LLM failover" above
+   - `DEEPSEEK_API_KEY` (required), `GEMINI_API_KEY` (recommended — text-generation
+     failover only; retrieval embeddings are local, see "LLM failover" above)
    - `GMAIL_EMAIL`, `GMAIL_PASSWORD` — **use a test/dedicated Gmail account for the initial run, not the real production inbox** (your call on when to switch)
    - `AUTO_SEND_ENABLED=false` — explicit, don't rely on the default. This phase is about accumulating real shadow-mode calibration data (see "Auto-send" above), not sending anything automatically
    - `DEMO_MODE` — leave unset (this is the real app, not the demo)
@@ -355,15 +401,26 @@ volume's mount path and everything that needs to persist lands together.
 
 ## Validation Results
 
-28-question test suite across English, French, and Chinese:
+28-question benchmark (English, French, Chinese) across four retrieval
+pipeline iterations — each script in `scripts/run_validation*.py` re-runs
+the same 28 questions through that stage's pipeline:
 
-| Category | Score |
-|----------|-------|
-| English (20Q) | 16/20 — 80% |
-| Multilingual (8Q) | 7/8 — 87.5% |
-| Overall | 23/28 — 82.1% |
+| Pipeline | Accuracy |
+|----------|----------|
+| V0/V1 — `similarity_search` (baseline) | 23/28 — 82.1% |
+| V2 — + BM25/MMR hybrid retrieval + CrossEncoder rerank | 27/28 — 96.4% |
+| V3 — + query rewriting + HyDE + dynamic per-intent k | 28/28 — 100% |
 
-Full results in `validation/Validation_Results_V1_28Q.csv`.
+V3 is the current production pipeline (with query rewrite/HyDE now produced
+by `classifier.py`'s merged call rather than separate `rag_chain.py` calls —
+see "LLM failover" above — and local embeddings instead of Gemini's; neither
+changes what's being tested here, the retrieval algorithm itself). Re-run
+with `python scripts/run_validation_v3.py`.
+
+An extended 42-question suite (`scripts/run_validation_42q.py`, 28 original +
+14 new questions) confirms no regression from either change: **42/42 —
+100%**, identical to the pre-migration baseline. Full results in
+`validation/Validation_Results_V3_42Q.csv`.
 
 ---
 
@@ -379,6 +436,7 @@ Full results in `validation/Validation_Results_V1_28Q.csv`.
 | 4 | Live email inbox, SMTP sending, human review dashboard, analytics | ✅ Complete |
 | 5 | Reliability hardening — SQLite queue, structured logging, connection pooling, graceful shutdown, KB hot-reload | ✅ Complete |
 | 6 | Confidence-driven auto-send, token/latency/cost tracking, Ops Dashboard | ✅ Complete |
+| 7 | Token/latency optimization — merged classify+rewrite+HyDE call, JSON-mode structured output, local embeddings (dropped last hard Gemini dependency), per-chunk relevance filtering, cache-hit-rate monitoring, output-token safety caps | ✅ Complete |
 
 ---
 
@@ -386,11 +444,15 @@ Full results in `validation/Validation_Results_V1_28Q.csv`.
 
 | Component | Technology |
 |-----------|-----------|
-| LLM | Gemini 2.5 Flash (Google AI) |
-| Embeddings | gemini-embedding-001 (multilingual) |
-| Vector store | ChromaDB |
+| LLM (primary) | DeepSeek `deepseek-v4-flash`, non-thinking mode |
+| LLM (fallback) | Gemini 2.5 Flash (Google AI) — transient DeepSeek failures only |
+| Embeddings | sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 (local) |
+| Reranker | cross-encoder/mmarco-mMiniLMv2-L12-H384-v1 (local, multilingual) |
+| Vector store | ChromaDB (BM25 + MMR hybrid retrieval, RRF-merged) |
 | Framework | LangChain |
 | UI | Streamlit |
+| Persistence | SQLite (`data/drafts.db`, WAL mode) |
 | Email | imaplib (IMAP) + smtplib (SMTP) via Gmail |
 | Language detection | langdetect + CJK heuristic |
 | Retry logic | tenacity (exponential backoff for 503/429) |
+| Alerting | Slack Incoming Webhooks (optional) |
