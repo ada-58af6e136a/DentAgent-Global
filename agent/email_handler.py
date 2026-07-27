@@ -452,6 +452,8 @@ def process_email(email_data):
     entry["prompt_tokens"] = usage["prompt_tokens"]
     entry["output_tokens"] = usage["output_tokens"]
     entry["total_tokens"] = usage["total_tokens"]
+    entry["cache_hit_tokens"] = usage["cache_hit_tokens"]
+    entry["cache_miss_tokens"] = usage["cache_miss_tokens"]
     entry["estimated_cost_usd"] = usage["cost_usd"]
     entry["used_fallback"] = usage["fallback_calls"] > 0
     # Measured up to this point, not through the SMTP round-trip below for

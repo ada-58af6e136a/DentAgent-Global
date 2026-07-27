@@ -36,13 +36,20 @@ pending_count = len(load_pending_drafts())
 
 escalation_rate = (today["escalated"] / today["total"] * 100) if today["total"] else 0.0
 auto_send_rate = (today["auto_sent"] / today["total"] * 100) if today["total"] else 0.0
+_today_cache_total = today["cache_hit_tokens"] + today["cache_miss_tokens"]
+cache_hit_rate = (today["cache_hit_tokens"] / _today_cache_total * 100) if _today_cache_total else 0.0
 
-k1, k2, k3, k4, k5 = st.columns(5)
+k1, k2, k3, k4, k5, k6 = st.columns(6)
 k1.metric("Emails today", today["total"])
 k2.metric("Escalation rate", f"{escalation_rate:.0f}%")
 k3.metric("Auto-send rate", f"{auto_send_rate:.0f}%")
 k4.metric("Avg latency", f"{today['avg_total_elapsed']:.1f}s")
 k5.metric("Est. cost today", f"${today['cost_usd']:.4f}")
+k6.metric("Prompt cache hit rate", f"{cache_hit_rate:.0f}%",
+          help="Share of prompt tokens served from DeepSeek's automatic prefix "
+               "cache (cheaper) vs. a full-price cache miss. 0% with real "
+               "traffic present means the fixed prompt prefixes (SYSTEM_PROMPT, "
+               "classify instructions) aren't matching cache — worth investigating.")
 
 st.divider()
 
@@ -187,7 +194,8 @@ st.divider()
 # ── Cost ─────────────────────────────────────────────────────────────────────
 
 st.subheader("Token cost")
-st.caption("Estimated from gemini-2.5-flash list pricing — see agent/api_client.py. "
+st.caption("DeepSeek deepseek-v4-flash primary, Gemini gemini-2.5-flash fallback "
+           "on transient errors — see agent/api_client.py for both price tables. "
            "Excludes embedding calls.")
 cost = get_cost_summary(start_str, end_str)
 
@@ -205,7 +213,8 @@ with cc1:
             .encode(
                 x=alt.X("date:T", title="Date"),
                 y=alt.Y("cost_usd:Q", title="USD"),
-                tooltip=["date", "prompt_tokens", "output_tokens", "cost_usd"],
+                tooltip=["date", "prompt_tokens", "output_tokens", "cost_usd",
+                         "cache_hit_tokens", "cache_miss_tokens"],
             )
             .properties(height=280)
         )
@@ -218,6 +227,33 @@ with cc2:
     else:
         df_intent = pd.DataFrame(cost["by_intent"])
         st.dataframe(df_intent, use_container_width=True, hide_index=True)
+
+st.markdown("**Prompt cache hit rate over time**")
+st.caption("DeepSeek automatically caches repeated prompt prefixes (e.g. "
+           "SYSTEM_PROMPT, the classify instructions) at a fraction of the "
+           "cache-miss price — see DEEPSEEK_CACHE_HIT_PRICE_PER_1M in "
+           "agent/api_client.py. This tracks how much of that saving is "
+           "actually landing.")
+if not cost["daily"]:
+    st.info("No cost data yet.")
+else:
+    df_cache = pd.DataFrame(cost["daily"])
+    df_cache["cache_total"] = df_cache["cache_hit_tokens"] + df_cache["cache_miss_tokens"]
+    df_cache["cache_hit_rate"] = df_cache.apply(
+        lambda r: (r["cache_hit_tokens"] / r["cache_total"] * 100) if r["cache_total"] else 0.0,
+        axis=1,
+    )
+    chart = (
+        alt.Chart(df_cache)
+        .mark_line(point=True)
+        .encode(
+            x=alt.X("date:T", title="Date"),
+            y=alt.Y("cache_hit_rate:Q", title="Cache hit rate (%)", scale=alt.Scale(domain=[0, 100])),
+            tooltip=["date", "cache_hit_tokens", "cache_miss_tokens", "cache_hit_rate"],
+        )
+        .properties(height=220)
+    )
+    st.altair_chart(chart, use_container_width=True)
 
 st.divider()
 

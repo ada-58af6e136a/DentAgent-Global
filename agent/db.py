@@ -40,6 +40,8 @@ _DRAFTS_MIGRATION_COLUMNS = {
     "estimated_cost_usd": "REAL DEFAULT 0.0",
     "used_fallback":     "INTEGER DEFAULT 0",
     "would_auto_send":   "INTEGER DEFAULT 0",
+    "cache_hit_tokens":  "INTEGER DEFAULT 0",
+    "cache_miss_tokens": "INTEGER DEFAULT 0",
 }
 
 
@@ -140,8 +142,9 @@ def save_draft(entry: dict) -> bool:
                  retrieval_score, status, final_reply, human_edited,
                  processed_at, confidence, classify_elapsed, rag_elapsed,
                  total_elapsed, prompt_tokens, output_tokens, total_tokens,
-                 estimated_cost_usd, used_fallback, would_auto_send)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                 estimated_cost_usd, used_fallback, would_auto_send,
+                 cache_hit_tokens, cache_miss_tokens)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             entry["message_id"],
             entry.get("timestamp"),
@@ -168,6 +171,8 @@ def save_draft(entry: dict) -> bool:
             entry.get("estimated_cost_usd", 0.0),
             int(entry.get("used_fallback", False)),
             int(entry.get("would_auto_send", False)),
+            entry.get("cache_hit_tokens", 0),
+            entry.get("cache_miss_tokens", 0),
         ))
         return cur.rowcount > 0
 
@@ -424,7 +429,9 @@ def get_cost_summary(start_date: str = None, end_date: str = None) -> dict:
                    SUM(prompt_tokens) AS prompt_tokens,
                    SUM(output_tokens) AS output_tokens,
                    SUM(total_tokens)  AS total_tokens,
-                   SUM(estimated_cost_usd) AS cost_usd
+                   SUM(estimated_cost_usd) AS cost_usd,
+                   SUM(cache_hit_tokens) AS cache_hit_tokens,
+                   SUM(cache_miss_tokens) AS cache_miss_tokens
               FROM drafts
              WHERE timestamp IS NOT NULL
                {"AND date(timestamp) >= ?" if start_date else ""}
@@ -461,12 +468,15 @@ def get_today_stats() -> dict:
                    SUM(used_fallback) AS fallback_count,
                    SUM(would_auto_send) AS would_auto_send_count,
                    AVG(total_elapsed) AS avg_total_elapsed,
-                   SUM(estimated_cost_usd) AS cost_usd
+                   SUM(estimated_cost_usd) AS cost_usd,
+                   SUM(cache_hit_tokens) AS cache_hit_tokens,
+                   SUM(cache_miss_tokens) AS cache_miss_tokens
               FROM drafts
              WHERE date(timestamp) = date('now')
         """).fetchone()
     d = dict(row)
-    for key in ("total", "escalated", "auto_sent", "fallback_count", "would_auto_send_count"):
+    for key in ("total", "escalated", "auto_sent", "fallback_count", "would_auto_send_count",
+                "cache_hit_tokens", "cache_miss_tokens"):
         d[key] = d[key] or 0
     d["avg_total_elapsed"] = d["avg_total_elapsed"] or 0.0
     d["cost_usd"] = d["cost_usd"] or 0.0
