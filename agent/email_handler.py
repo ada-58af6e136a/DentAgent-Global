@@ -2,7 +2,7 @@
 email_handler.py
 
 Handles inbound email reading via IMAP.
-Polls the inbox every 60 seconds for unread emails,
+Polls the inbox every POLL_INTERVAL_SECONDS (default 15s) for unread emails,
 passes each through classifier and rag_chain,
 and saves drafts to SQLite via agent.db.
 
@@ -525,7 +525,7 @@ def process_email(email_data):
     return entry
 
 
-def run_loop(interval_seconds=60, max_workers=5):
+def run_loop(interval_seconds=15, max_workers=5):
     """
     Main polling loop — checks inbox every interval_seconds.
 
@@ -720,4 +720,5 @@ def send_reply(to_address: str, subject: str,
 
 
 if __name__ == "__main__":
-    run_loop(interval_seconds=60)
+    # Mirrors run_handler.py's default — see its comment for why 15s not 60s.
+    run_loop(interval_seconds=int(os.getenv("POLL_INTERVAL_SECONDS", "15")))
