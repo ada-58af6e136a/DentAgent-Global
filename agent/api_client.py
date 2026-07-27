@@ -38,10 +38,10 @@ def get_client() -> genai.Client:
     Return the shared genai.Client, creating it on first call (thread-safe).
 
     Gemini is the fallback provider for text generation (see
-    generate_content_tracked()) — this is still unconditionally required
-    though, because agent/rag_chain.py's retrieval step uses
-    GoogleGenerativeAIEmbeddings, which only Gemini provides. DeepSeek has no
-    embeddings API, so Gemini can never be fully removed from this project.
+    generate_content_tracked()) — that's its only remaining role. Retrieval
+    embeddings moved to a local model (agent/embeddings.py), so unlike
+    before, GEMINI_API_KEY being unset only degrades failover behavior on a
+    DeepSeek outage, it no longer breaks retrieval.
     """
     global _client
     if _client is not None:
@@ -161,6 +161,7 @@ def start_usage_tracking() -> None:
     _usage_totals.set({
         "prompt_tokens": 0, "output_tokens": 0, "total_tokens": 0,
         "cost_usd": 0.0, "fallback_calls": 0,
+        "cache_hit_tokens": 0, "cache_miss_tokens": 0,
     })
 
 
@@ -170,7 +171,8 @@ def get_usage_totals() -> dict:
     if totals:
         return dict(totals)
     return {"prompt_tokens": 0, "output_tokens": 0, "total_tokens": 0,
-            "cost_usd": 0.0, "fallback_calls": 0}
+            "cost_usd": 0.0, "fallback_calls": 0,
+            "cache_hit_tokens": 0, "cache_miss_tokens": 0}
 
 
 def _estimate_gemini_cost_usd(prompt_tokens: int, output_tokens: int) -> float:
@@ -192,7 +194,8 @@ def _estimate_deepseek_cost_usd(cache_hit_tokens: int, cache_miss_tokens: int,
 
 
 def _track_usage(provider: str, prompt_tokens: int, output_tokens: int, total_tokens: int,
-                  cost_usd: float, fallback: bool = False) -> None:
+                  cost_usd: float, fallback: bool = False,
+                  cache_hit_tokens: int = 0, cache_miss_tokens: int = 0) -> None:
     totals = _usage_totals.get()
     if totals is None:
         return
@@ -200,11 +203,14 @@ def _track_usage(provider: str, prompt_tokens: int, output_tokens: int, total_to
     totals["output_tokens"] += output_tokens
     totals["total_tokens"] += total_tokens
     totals["cost_usd"] += cost_usd
+    totals["cache_hit_tokens"] += cache_hit_tokens
+    totals["cache_miss_tokens"] += cache_miss_tokens
     if fallback:
         totals["fallback_calls"] += 1
 
 
-def _call_deepseek(contents, fallback: bool = False) -> "_TextResponse":
+def _call_deepseek(contents, fallback: bool = False, json_mode: bool = False,
+                    max_output_tokens: int | None = None) -> "_TextResponse":
     """
     Send the prompt to DeepSeek (non-thinking mode) and track its usage.
 
@@ -212,12 +218,28 @@ def _call_deepseek(contents, fallback: bool = False) -> "_TextResponse":
     — ordinarily False, since DeepSeek is the primary provider. Kept as a
     parameter (not hardcoded) so the primary/fallback roles stay a one-line
     swap in generate_content_tracked() rather than requiring changes here.
+
+    json_mode requests DeepSeek's native JSON-object response format instead
+    of relying on prompt instructions alone — classify_intent()'s output is
+    parsed with json.loads(), and a malformed response there isn't caught by
+    the transient-error @retry (a JSONDecodeError isn't transient), so it
+    crashes the whole email and forces a full reprocess next poll cycle.
+
+    max_output_tokens is a safety cap, not a target — callers size it above
+    what a normal reply/classification actually needs, purely to bound the
+    cost of a pathological/runaway generation.
     """
     text = _extract_text(contents)
+    kwargs = {}
+    if json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
+    if max_output_tokens is not None:
+        kwargs["max_tokens"] = max_output_tokens
     response = get_deepseek_client().chat.completions.create(
         model=DEEPSEEK_MODEL,
         messages=[{"role": "user", "content": text}],
         extra_body={"thinking": {"type": "disabled"}},
+        **kwargs,
     )
 
     usage = getattr(response, "usage", None)
@@ -234,20 +256,36 @@ def _call_deepseek(contents, fallback: bool = False) -> "_TextResponse":
         cache_miss_tokens = prompt_tokens
 
     cost = _estimate_deepseek_cost_usd(cache_hit_tokens, cache_miss_tokens, output_tokens)
-    _track_usage("deepseek", prompt_tokens, output_tokens, total_tokens, cost, fallback=fallback)
+    _track_usage("deepseek", prompt_tokens, output_tokens, total_tokens, cost, fallback=fallback,
+                 cache_hit_tokens=cache_hit_tokens, cache_miss_tokens=cache_miss_tokens)
 
     reply_text = response.choices[0].message.content or ""
     return _TextResponse(reply_text)
 
 
-def _call_gemini(model: str, contents, fallback: bool = False):
+def _call_gemini(model: str, contents, fallback: bool = False, json_mode: bool = False,
+                  max_output_tokens: int | None = None):
     """
     Call Gemini and track its usage. fallback marks whether this call is
     covering for a DeepSeek failure — ordinarily True, since Gemini is now
     the fallback provider for text generation (see module-level notes on
     get_client() for why Gemini can't be removed entirely: embeddings).
+
+    json_mode mirrors the DeepSeek json_object request via Gemini's
+    response_mime_type config, so a failover mid-call doesn't silently drop
+    back to unstructured text parsing. max_output_tokens mirrors DeepSeek's
+    safety cap the same way.
     """
-    response = get_client().models.generate_content(model=model, contents=contents)
+    config_kwargs = {}
+    if json_mode:
+        config_kwargs["response_mime_type"] = "application/json"
+    if max_output_tokens is not None:
+        config_kwargs["max_output_tokens"] = max_output_tokens
+    config = types.GenerateContentConfig(**config_kwargs) if config_kwargs else None
+    response = get_client().models.generate_content(
+        model=model, contents=contents,
+        **({"config": config} if config else {}),
+    )
 
     usage = getattr(response, "usage_metadata", None)
     if usage is not None:
@@ -255,12 +293,17 @@ def _call_gemini(model: str, contents, fallback: bool = False):
         output_tokens = getattr(usage, "candidates_token_count", 0) or 0
         total_tokens = getattr(usage, "total_token_count", 0) or (prompt_tokens + output_tokens)
         cost = _estimate_gemini_cost_usd(prompt_tokens, output_tokens)
-        _track_usage("gemini", prompt_tokens, output_tokens, total_tokens, cost, fallback=fallback)
+        # No explicit context caching configured for the Gemini fallback path
+        # (see rag_chain/classifier prompt construction) — every prompt token
+        # is a cache miss here, unlike DeepSeek's automatic KV cache.
+        _track_usage("gemini", prompt_tokens, output_tokens, total_tokens, cost, fallback=fallback,
+                     cache_hit_tokens=0, cache_miss_tokens=prompt_tokens)
 
     return response
 
 
-def generate_content_tracked(model: str, contents):
+def generate_content_tracked(model: str, contents, json_mode: bool = False,
+                              max_output_tokens: int | None = None):
     """
     DeepSeek-primary, Gemini-fallback for text generation. `model` names the
     Gemini model to use only if/when falling back to it (e.g. "gemini-2.5-flash").
@@ -274,15 +317,21 @@ def generate_content_tracked(model: str, contents):
     failure shape regardless of whether failover exists at all, so the
     existing @retry decorators on classify_intent/generate_reply keep
     working unchanged.
+
+    json_mode requests a native JSON-object response from whichever provider
+    ends up serving the call (see _call_deepseek / _call_gemini).
+    max_output_tokens is a cost/runaway-output safety cap, forwarded as-is.
     """
     try:
-        return _call_deepseek(contents, fallback=False)
+        return _call_deepseek(contents, fallback=False, json_mode=json_mode,
+                               max_output_tokens=max_output_tokens)
     except Exception as deepseek_exc:
         if not _is_transient(deepseek_exc):
             raise
         log.warning("DeepSeek transient error (%s) — failing over to Gemini", deepseek_exc)
         try:
-            return _call_gemini(model, contents, fallback=True)
+            return _call_gemini(model, contents, fallback=True, json_mode=json_mode,
+                                 max_output_tokens=max_output_tokens)
         except Exception as gemini_exc:
             log.error("Gemini failover also failed: %s", gemini_exc)
             raise deepseek_exc from None
